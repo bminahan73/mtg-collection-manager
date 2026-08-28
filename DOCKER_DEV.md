@@ -5,7 +5,7 @@
 Build and start both services with one command:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Then visit:
@@ -16,39 +16,39 @@ Then visit:
 
 ### Start services (images already built)
 ```bash
-docker-compose up
+docker compose up
 ```
 
 ### Start in background
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Stop services
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Rebuild images (after dependency changes)
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 ### View logs
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### View specific service logs
 ```bash
-docker-compose logs -f backend
-docker-compose logs -f client
+docker compose logs -f backend
+docker compose logs -f client
 ```
 
 ### Run a command in a container
 ```bash
-docker-compose exec backend npm install
-docker-compose exec client npm install
+docker compose exec backend npm install
+docker compose exec client npm install
 ```
 
 ## How It Works
@@ -70,11 +70,11 @@ ports:
 
 ### Clear everything and start fresh
 ```bash
-docker-compose down -v
-docker-compose up --build
+docker compose down -v
+docker compose up --build
 ```
 
 ### Check what's running
 ```bash
-docker-compose ps
+docker compose ps
 ```

@@ -1,7 +1,7 @@
 steps:
   - name: Start MTG Collection Manager
     description: Spin up backend and client services using Docker
-    run: docker-compose up --build
+    run: docker compose up --build
     env:
       - key: COMPOSE_PROJECT_NAME
         value: mtg-collection

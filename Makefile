@@ -3,7 +3,7 @@
 help:
 	@echo "MTG Collection Manager - Docker Commands"
 	@echo ""
-	@echo "make up           - Start services (docker-compose up)"
+	@echo "make up           - Start services (docker compose up)"
 	@echo "make down         - Stop services"
 	@echo "make build        - Build/rebuild Docker images"
 	@echo "make logs         - View logs from all services"
@@ -14,32 +14,32 @@ help:
 	@echo "make shell-client  - Open shell in client container"
 
 up:
-	docker-compose up
+	docker compose up
 
 up-build:
-	docker-compose up --build
+	docker compose up --build
 
 down:
-	docker-compose down
+	docker compose down
 
 build:
-	docker-compose build
+	docker compose build
 
 logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 logs-backend:
-	docker-compose logs -f backend
+	docker compose logs -f backend
 
 logs-client:
-	docker-compose logs -f client
+	docker compose logs -f client
 
 clean:
-	docker-compose down -v
+	docker compose down -v
 	docker system prune -f
 
 shell-backend:
-	docker-compose exec backend sh
+	docker compose exec backend sh
 
 shell-client:
-	docker-compose exec client sh
+	docker compose exec client sh
