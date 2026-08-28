@@ -1,0 +1,19 @@
+# GitHub App manifest for easy installation. Replace URLs and settings before creating the app.
+# More info: https://docs.github.com/en/developers/apps/creating-github-apps/creating-a-github-app-from-a-manifest
+
+name: "MTG Collection Manager App"
+url: "https://example.com"
+hook_attributes:
+  url: "https://example.com/webhook"
+redirect_url: "https://example.com/settings"
+public: false
+
+default_permissions:
+  issues: write
+  contents: read
+  pull_requests: write
+  metadata: read
+
+default_events:
+  - push
+  - pull_request
