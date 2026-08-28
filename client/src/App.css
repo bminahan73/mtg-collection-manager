@@ -1,6 +1,15 @@
 body{ font-family: system-ui, Arial, sans-serif; padding: 16px }
 .app{ max-width: 900px; margin: 0 auto }
+.search{ margin-bottom: 16px }
 .search input{ width: 70%; padding: 8px }
+.filters{ margin: 16px 0; padding: 12px; background: #f5f5f5; border-radius: 4px }
+.filters h3{ margin-top: 0; margin-bottom: 12px }
+.filter-group{ margin-bottom: 12px }
+.filter-group label{ display: block; font-weight: bold; margin-bottom: 6px }
+.color-buttons, .type-buttons{ display: flex; gap: 6px; flex-wrap: wrap }
+.color-btn, .type-btn{ padding: 6px 12px; border: 2px solid #ccc; background: white; cursor: pointer; border-radius: 4px }
+.color-btn.active, .type-btn.active{ background: #007bff; color: white; border-color: #0056b3 }
+.filter-group select, .filter-group input[type="number"]{ padding: 6px; border: 1px solid #ccc; border-radius: 4px }
 .results, .collection{ margin-top: 16px }
 .card{ display:flex; gap:8px; align-items:center; padding:8px; border:1px solid #eee }
 .card img{ width:56px; height:auto }

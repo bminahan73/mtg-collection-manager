@@ -36,6 +36,33 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+// Filter helper endpoint (optional, for backend-side filtering)
+app.get('/api/cards/filter', async (req, res) => {
+  const { colors, types, rarity, manaMax, name } = req.query;
+  const queryParts = [];
+  
+  if(name) queryParts.push(name);
+  if(colors) queryParts.push(`c:${colors}`);
+  if(types) {
+    const typeArray = Array.isArray(types) ? types : [types];
+    typeArray.forEach(t => queryParts.push(`t:${t}`));
+  }
+  if(rarity) queryParts.push(`r:${rarity}`);
+  if(manaMax) queryParts.push(`cmc<=${manaMax}`);
+  
+  const q = queryParts.join(' ');
+  
+  if(!q) return res.status(400).json({ error: 'at least one filter is required' });
+  
+  try{
+    const r = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(q)}`);
+    const json = await r.json();
+    res.json(json);
+  }catch(err){
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // Collection endpoints
 app.get('/api/collection', async (req, res) => {
   const coll = await readCollection();
