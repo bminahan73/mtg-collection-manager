@@ -1,0 +1,7 @@
+body{ font-family: system-ui, Arial, sans-serif; padding: 16px }
+.app{ max-width: 900px; margin: 0 auto }
+.search input{ width: 70%; padding: 8px }
+.results, .collection{ margin-top: 16px }
+.card{ display:flex; gap:8px; align-items:center; padding:8px; border:1px solid #eee }
+.card img{ width:56px; height:auto }
+.card.small img{ width:40px }
