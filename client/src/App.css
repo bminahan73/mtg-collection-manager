@@ -50,6 +50,9 @@ h2{ margin-bottom: 0; color: #fff9e9; font-size: 30px; font-weight: 400; letter-
 .empty-state{ padding: 48px 20px; color: #9d9a8d; text-align: center; background: #22231e; border: 1px dashed #77705988; font: 14px Arial, sans-serif }
 .empty-state span{ display: block; margin-bottom: 12px; color: #c9af65; font: 30px Georgia, serif }
 .empty-state p{ margin-bottom: 0 }
+.load-more{ display: block; margin: 24px auto 0; padding: 12px 18px; color: #c9af65; background: transparent; border: 1px solid #c9af65; font: 700 12px Arial, sans-serif; letter-spacing: .4px }
+.load-more:hover:not(:disabled){ color: #1a1b16; background: #c9af65 }
+.load-more:disabled{ cursor: wait; opacity: .6 }
 .message{ padding: 18px; font: 14px Arial, sans-serif }.error-message{ color: #efb0a0; background: #402620; border: 1px solid #9b5445 }
 .collection-heading{ margin-bottom: 20px }.collection-heading h2 span{ color: #b9a76a; font-size: 17px; vertical-align: middle }
 .sort-control{ display: flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0 }.sort-control select{ min-width: 110px }

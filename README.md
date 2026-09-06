@@ -4,7 +4,7 @@ Minimal starter for managing an MTG collection.
 
 Backend (basic):
 - Express API that proxies Scryfall for card search
-- Simple JSON-backed collection store (backend/data/collection.json)
+- SQLite-backed collection store (backend/data/collection.sqlite)
 
 To run backend:
 1. cd backend

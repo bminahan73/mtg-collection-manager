@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 
@@ -15,7 +16,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const databasePath = path.resolve('./data/collection.sqlite');
+const databasePath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'collection.sqlite');
 let database;
 
 async function initializeDatabase(){
@@ -43,6 +44,16 @@ async function readCard(id){
   const row = await db.get('SELECT card_json, quantity FROM collection WHERE id = ?', id);
   return row ? { ...JSON.parse(row.card_json), quantity: row.quantity } : null;
 }
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const db = await database;
+    await db.get('SELECT 1 AS ok');
+    res.json({ status: 'ok' });
+  } catch(err) {
+    res.status(503).json({ status: 'error', error: String(err) });
+  }
+});
 
 function validQuantity(value){
   const quantity = Number(value);

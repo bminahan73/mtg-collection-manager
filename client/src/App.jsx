@@ -21,10 +21,12 @@ function App(){
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [totalResults, setTotalResults] = useState(0)
+  const [nextPage, setNextPage] = useState('')
   const [collection, setCollection] = useState([])
   const [collectionState, setCollectionState] = useState('loading')
   const [collectionError, setCollectionError] = useState('')
   const [searchState, setSearchState] = useState('idle')
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [sortBy, setSortBy] = useState('name')
   const [filters, setFilters] = useState({ colors: [], types: [], rarity: '', manaMax: '' })
@@ -52,12 +54,30 @@ function App(){
       if(!res.ok) throw new Error(json.details || 'Scryfall could not complete that search.')
       setResults(json.data || [])
       setTotalResults(json.total_cards || json.data?.length || 0)
+      setNextPage(json.next_page || '')
       setSearchState('success')
     } catch(error) {
       setResults([])
       setTotalResults(0)
       setSearchError(error.message || 'Search failed. Please try again.')
       setSearchState('error')
+    }
+  }
+
+  async function loadMore(){
+    if(!nextPage || isLoadingMore) return
+    setIsLoadingMore(true)
+    setSearchError('')
+    try {
+      const res = await fetch(nextPage)
+      const json = await res.json()
+      if(!res.ok) throw new Error(json.details || 'Scryfall could not load more cards.')
+      setResults(previous => [...previous, ...(json.data || [])])
+      setNextPage(json.next_page || '')
+    } catch(error) {
+      setSearchError(error.message || 'Could not load more cards.')
+    } finally {
+      setIsLoadingMore(false)
     }
   }
 
@@ -157,7 +177,7 @@ function App(){
     <section className="stats" aria-label="Collection summary"><div><strong>{totalCards}</strong><span>cards owned</span></div><div><strong>{collection.length}</strong><span>unique cards</span></div><div><strong>{colorsInCollection.length || '—'}</strong><span>colors represented</span></div></section>
     <main>
       <section className="search-panel"><div className="section-heading"><div><p className="eyebrow">DISCOVER</p><h2>Find your next card</h2></div><span className="api-note">Powered by Scryfall</span></div><form className="search" onSubmit={search}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Try “lightning bolt” or “legendary elf”" aria-label="Search cards" /><button type="submit" disabled={searchState === 'loading'}>{searchState === 'loading' ? 'Searching…' : 'Search cards'}</button></form><div className="filters"><div className="filter-group"><label>Colors</label><div className="color-buttons">{['W', 'U', 'B', 'R', 'G'].map(color => <button type="button" key={color} className={`color-btn ${colorClasses[color]} ${filters.colors.includes(color) ? 'active' : ''}`} onClick={() => toggleColor(color)} title={colorNames[color]} aria-pressed={filters.colors.includes(color)}>{color}</button>)}</div></div><div className="filter-group type-filter"><label>Card type</label><div className="type-buttons">{['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'].map(type => <button type="button" key={type} className={`type-btn ${filters.types.includes(type) ? 'active' : ''}`} onClick={() => toggleType(type)} aria-pressed={filters.types.includes(type)}>{type}</button>)}</div></div><div className="compact-filters"><label>Rarity<select value={filters.rarity} onChange={e => setFilters(prev => ({...prev, rarity: e.target.value}))}><option value="">Any rarity</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="mythic">Mythic</option></select></label><label>Max mana<input type="number" min="0" max="20" value={filters.manaMax} onChange={e => setFilters(prev => ({...prev, manaMax: e.target.value}))} placeholder="Any" /></label></div></div></section>
-      <section className="results"><div className="section-heading"><div><p className="eyebrow">SEARCH RESULTS</p><h2>{searchState === 'success' ? `${totalResults.toLocaleString()} cards found` : 'A whole multiverse'}</h2></div></div>{searchState === 'idle' && <div className="empty-state"><span>✦</span><p>Search for a card to begin exploring.</p></div>}{searchState === 'error' && <div className="message error-message">{searchError}</div>}{searchState === 'success' && results.length === 0 && <div className="empty-state"><span>⌁</span><p>No cards matched those filters. Try a broader search.</p></div>}<div className="card-grid">{results.map(card => <CardTile key={card.id} card={card} actionLabel="Add to collection" onAction={() => add(card)} />)}</div></section>
+      <section className="results"><div className="section-heading"><div><p className="eyebrow">SEARCH RESULTS</p><h2>{searchState === 'success' ? `${totalResults.toLocaleString()} cards found` : 'A whole multiverse'}</h2></div></div>{searchState === 'idle' && <div className="empty-state"><span>✦</span><p>Search for a card to begin exploring.</p></div>}{searchState === 'error' && <div className="message error-message">{searchError}</div>}{searchState === 'success' && results.length === 0 && <div className="empty-state"><span>⌁</span><p>No cards matched those filters. Try a broader search.</p></div>}<div className="card-grid">{results.map(card => <CardTile key={card.id} card={card} actionLabel="Add to collection" onAction={() => add(card)} />)}</div>{searchError && searchState === 'success' && <div className="message error-message">{searchError}</div>}{nextPage && <button className="load-more" type="button" onClick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more cards…' : `Load more cards (${results.length} of ${totalResults.toLocaleString()})`}</button>}</section>
       <section className="collection"><div className="section-heading collection-heading"><div><p className="eyebrow">YOUR BINDER</p><h2>My collection <span>{totalCards}</span></h2></div><label className="sort-control">Sort by<select value={sortBy} onChange={e => setSortBy(e.target.value)}><option value="name">Name</option><option value="quantity">Quantity</option><option value="rarity">Rarity</option></select></label></div>{collectionState === 'loading' && <div className="message">Loading your saved collection…</div>}{collectionError && <div className="message error-message">{collectionError}</div>}{collection.length === 0 && collectionState !== 'loading' && <div className="empty-state collection-empty"><span>＋</span><p>Your collection is waiting for its first card.</p></div>}<div className="collection-list">{sortedCollection.map(card => <article key={card.id} className="collection-card"><img src={cardImage(card)} alt="" /><div className="collection-card-info"><strong>{card.name}</strong><span>{card.set_name || card.set?.toUpperCase()} · {card.rarity}</span></div><div className="quantity" aria-label={`${card.quantity} copies of ${card.name}`}><button onClick={() => changeQuantity(card.id, -1)} aria-label={`Remove one ${card.name}`}>−</button><strong>{card.quantity}</strong><button onClick={() => changeQuantity(card.id, 1)} aria-label={`Add one ${card.name}`}>＋</button></div></article>)}</div></section>
     </main><footer>Built for the cards you actually play with.</footer>
   </div>
