@@ -1,26 +1,52 @@
 import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', process.env.CLIENT_ORIGIN || 'http://localhost:5173');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
-const dataDir = path.resolve('./backend/data');
-const dataFile = path.join(dataDir, 'collection.json');
+const databasePath = path.resolve('./data/collection.sqlite');
+let database;
 
-async function readCollection(){
-  try{
-    const txt = await fs.readFile(dataFile, 'utf8');
-    return JSON.parse(txt || '[]');
-  }catch(e){
-    return [];
-  }
+async function initializeDatabase(){
+  await fs.mkdir(path.dirname(databasePath), { recursive: true });
+  database = open({ filename: databasePath, driver: sqlite3.Database });
+  const db = await database;
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS collection (
+      id TEXT PRIMARY KEY,
+      card_json TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
-async function writeCollection(arr){
-  await fs.mkdir(dataDir, { recursive: true });
-  await fs.writeFile(dataFile, JSON.stringify(arr, null, 2));
+async function readCollection(){
+  const db = await database;
+  const rows = await db.all('SELECT card_json, quantity FROM collection ORDER BY json_extract(card_json, \'$.name\') COLLATE NOCASE');
+  return rows.map(row => ({ ...JSON.parse(row.card_json), quantity: row.quantity }));
+}
+
+async function readCard(id){
+  const db = await database;
+  const row = await db.get('SELECT card_json, quantity FROM collection WHERE id = ?', id);
+  return row ? { ...JSON.parse(row.card_json), quantity: row.quantity } : null;
+}
+
+function validQuantity(value){
+  const quantity = Number(value);
+  return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
 }
 
 // Search Scryfall (proxy)
@@ -65,27 +91,62 @@ app.get('/api/cards/filter', async (req, res) => {
 
 // Collection endpoints
 app.get('/api/collection', async (req, res) => {
-  const coll = await readCollection();
-  res.json(coll);
+  try {
+    res.json(await readCollection());
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.post('/api/collection', async (req, res) => {
   const card = req.body.card;
-  if (!card) return res.status(400).json({ error: 'card object required in body' });
-  const coll = await readCollection();
-  coll.push(card);
-  await writeCollection(coll);
-  res.status(201).json(card);
+  const quantity = validQuantity(req.body.quantity || 1);
+  if (!card?.id) return res.status(400).json({ error: 'card with an id is required in body' });
+  if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
+  try {
+    const db = await database;
+    await db.run(`
+      INSERT INTO collection (id, card_json, quantity, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET
+        card_json = excluded.card_json,
+        quantity = collection.quantity + excluded.quantity,
+        updated_at = CURRENT_TIMESTAMP
+    `, card.id, JSON.stringify(card), quantity);
+    res.status(201).json(await readCard(card.id));
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.put('/api/collection/:id', async (req, res) => {
+  const id = req.params.id;
+  const quantity = validQuantity(req.body.quantity);
+  if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
+  try {
+    const db = await database;
+    const result = await db.run('UPDATE collection SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', quantity, id);
+    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+    res.json(await readCard(id));
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.delete('/api/collection/:id', async (req, res) => {
-  const id = req.params.id;
-  let coll = await readCollection();
-  const before = coll.length;
-  coll = coll.filter(c => String(c.id) !== String(id));
-  if (coll.length === before) return res.status(404).json({ error: 'not found' });
-  await writeCollection(coll);
-  res.json({ deleted: id });
+  try {
+    const db = await database;
+    const result = await db.run('DELETE FROM collection WHERE id = ?', req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ deleted: req.params.id });
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
-app.listen(PORT, () => console.log(`MTG backend listening on ${PORT}`));
+initializeDatabase()
+  .then(() => app.listen(PORT, () => console.log(`MTG backend listening on ${PORT}`)))
+  .catch(err => {
+    console.error('Could not initialize SQLite:', err);
+    process.exit(1);
+  });
