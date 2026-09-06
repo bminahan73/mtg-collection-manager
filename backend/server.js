@@ -33,9 +33,13 @@ async function initializeDatabase(){
     CREATE TABLE IF NOT EXISTS wishlist (
       id TEXT PRIMARY KEY,
       card_json TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
       added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  try { await db.exec('ALTER TABLE wishlist ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0)'); } catch(err) {
+    if(!String(err.message).includes('duplicate column name')) throw err;
+  }
 }
 
 async function readCollection(){
@@ -67,8 +71,8 @@ function validQuantity(value){
 
 async function readWishlist(){
   const db = await database;
-  const rows = await db.all('SELECT card_json FROM wishlist ORDER BY json_extract(card_json, \'$.name\') COLLATE NOCASE');
-  return rows.map(row => JSON.parse(row.card_json));
+  const rows = await db.all('SELECT card_json, quantity FROM wishlist ORDER BY json_extract(card_json, \'$.name\') COLLATE NOCASE');
+  return rows.map(row => ({ ...JSON.parse(row.card_json), quantity: row.quantity }));
 }
 
 // Search Scryfall (proxy)
@@ -147,7 +151,8 @@ app.put('/api/collection/:id', async (req, res) => {
   if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
   try {
     const db = await database;
-    const result = await db.run('UPDATE collection SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', quantity, id);
+    const cardJson = req.body.card ? JSON.stringify({ ...req.body.card, id }) : null;
+    const result = await db.run('UPDATE collection SET quantity = ?, card_json = COALESCE(?, card_json), updated_at = CURRENT_TIMESTAMP WHERE id = ?', quantity, cardJson, id);
     if (result.changes === 0) return res.status(404).json({ error: 'not found' });
     res.json(await readCard(id));
   } catch(err) {
@@ -176,15 +181,33 @@ app.get('/api/wishlist', async (req, res) => {
 
 app.post('/api/wishlist', async (req, res) => {
   const card = req.body.card;
+  const quantity = validQuantity(req.body.quantity || 1);
   if (!card?.id) return res.status(400).json({ error: 'card with an id is required in body' });
+  if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
   try {
     const db = await database;
     await db.run(`
-      INSERT INTO wishlist (id, card_json, added_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET card_json = excluded.card_json
-    `, card.id, JSON.stringify(card));
-    res.status(201).json(card);
+      INSERT INTO wishlist (id, card_json, quantity, added_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET card_json = excluded.card_json, quantity = wishlist.quantity + excluded.quantity
+    `, card.id, JSON.stringify(card), quantity);
+    res.status(201).json({ ...card, quantity });
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.put('/api/wishlist/:id', async (req, res) => {
+  const quantity = validQuantity(req.body.quantity);
+  if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
+  try {
+    const db = await database;
+    const cardJson = req.body.card ? JSON.stringify({ ...req.body.card, id: req.params.id }) : null;
+    const result = await db.run('UPDATE wishlist SET quantity = ?, card_json = COALESCE(?, card_json) WHERE id = ?', quantity, cardJson, req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+    const rows = await db.all('SELECT card_json, quantity FROM wishlist WHERE id = ?', req.params.id);
+    const row = rows[0];
+    res.json({ ...JSON.parse(row.card_json), quantity: row.quantity });
   } catch(err) {
     res.status(500).json({ error: String(err) });
   }
