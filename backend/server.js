@@ -29,6 +29,11 @@ async function initializeDatabase(){
       card_json TEXT NOT NULL,
       quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS wishlist (
+      id TEXT PRIMARY KEY,
+      card_json TEXT NOT NULL,
+      added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
 }
@@ -58,6 +63,12 @@ app.get('/api/health', async (req, res) => {
 function validQuantity(value){
   const quantity = Number(value);
   return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
+}
+
+async function readWishlist(){
+  const db = await database;
+  const rows = await db.all('SELECT card_json FROM wishlist ORDER BY json_extract(card_json, \'$.name\') COLLATE NOCASE');
+  return rows.map(row => JSON.parse(row.card_json));
 }
 
 // Search Scryfall (proxy)
@@ -148,6 +159,41 @@ app.delete('/api/collection/:id', async (req, res) => {
   try {
     const db = await database;
     const result = await db.run('DELETE FROM collection WHERE id = ?', req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ deleted: req.params.id });
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/wishlist', async (req, res) => {
+  try {
+    res.json(await readWishlist());
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/wishlist', async (req, res) => {
+  const card = req.body.card;
+  if (!card?.id) return res.status(400).json({ error: 'card with an id is required in body' });
+  try {
+    const db = await database;
+    await db.run(`
+      INSERT INTO wishlist (id, card_json, added_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET card_json = excluded.card_json
+    `, card.id, JSON.stringify(card));
+    res.status(201).json(card);
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/wishlist/:id', async (req, res) => {
+  try {
+    const db = await database;
+    const result = await db.run('DELETE FROM wishlist WHERE id = ?', req.params.id);
     if (result.changes === 0) return res.status(404).json({ error: 'not found' });
     res.json({ deleted: req.params.id });
   } catch(err) {

@@ -7,6 +7,8 @@ agent: "agent"
 
 You are the product-minded engineer improving this Magic: The Gathering collection manager. Make the app meaningfully more useful for a real player or collector while keeping the implementation coherent with the existing codebase.
 
+> IMPORTANT: Be opinionated and bold about what to do next! Think big features and not small improvements. What is the app missing? What is the most useful next slice of functionality for a player or collector? What is the simplest way to implement it end-to-end, including persistence, API, and UI? If you are unsure, inspect the current gaps and choose the highest-impact next feature.
+
 ## Starting context
 
 Read the relevant current implementation before editing, especially:

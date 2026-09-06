@@ -17,12 +17,17 @@ function normalizeCollection(cards){
   }, [])
 }
 
+function normalizeWishlist(cards){
+  return cards.reduce((items, card) => items.some(item => item.id === card.id) ? items : [...items, card], [])
+}
+
 function App(){
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [totalResults, setTotalResults] = useState(0)
   const [nextPage, setNextPage] = useState('')
   const [collection, setCollection] = useState([])
+  const [wishlist, setWishlist] = useState([])
   const [collectionState, setCollectionState] = useState('loading')
   const [collectionError, setCollectionError] = useState('')
   const [searchState, setSearchState] = useState('idle')
@@ -94,12 +99,35 @@ function App(){
     localStorage.setItem('mtg-collection', JSON.stringify(nextCollection))
   }
 
+  function updateWishlist(nextWishlist){
+    setWishlist(nextWishlist)
+    localStorage.setItem('mtg-wishlist', JSON.stringify(nextWishlist))
+  }
+
+  async function toggleWishlist(card){
+    const alreadySaved = wishlist.some(item => item.id === card.id)
+    const nextWishlist = alreadySaved ? wishlist.filter(item => item.id !== card.id) : [...wishlist, card]
+    updateWishlist(nextWishlist)
+    try {
+      const response = await fetch(`${API_BASE}/api/wishlist${alreadySaved ? `/${card.id}` : ''}`, {
+        method: alreadySaved ? 'DELETE' : 'POST',
+        headers: alreadySaved ? undefined : { 'Content-Type': 'application/json' },
+        body: alreadySaved ? undefined : JSON.stringify({ card })
+      })
+      if(!response.ok) throw new Error('The wishlist server rejected that change.')
+      setCollectionError('')
+    } catch(error) {
+      setCollectionError(`${error.message} Your local wishlist is still available.`)
+    }
+  }
+
   async function add(card){
     const existing = collection.find(item => item.id === card.id)
     const nextCollection = existing
       ? collection.map(item => item.id === card.id ? { ...item, quantity: item.quantity + 1 } : item)
       : [...collection, { ...card, quantity: 1 }]
     updateCollection(nextCollection)
+    if(wishlist.some(item => item.id === card.id)) await toggleWishlist(card)
     try {
       const response = await fetch(`${API_BASE}/api/collection${existing ? `/${card.id}` : ''}`, {
         method: existing ? 'PUT' : 'POST',
@@ -137,12 +165,18 @@ function App(){
     const localCollection = (() => {
       try { return normalizeCollection(raw ? JSON.parse(raw) : []) } catch { return [] }
     })()
-    fetch(`${API_BASE}/api/collection`)
-      .then(response => {
-        if(!response.ok) throw new Error('The collection server is unavailable.')
-        return response.json()
-      })
-      .then(cards => {
+    const rawWishlist = localStorage.getItem('mtg-wishlist')
+    const localWishlist = (() => {
+      try { return normalizeWishlist(rawWishlist ? JSON.parse(rawWishlist) : []) } catch { return [] }
+    })()
+    Promise.all([fetch(`${API_BASE}/api/collection`), fetch(`${API_BASE}/api/wishlist`)]).then(async ([collectionResponse, wishlistResponse]) => {
+        if(!collectionResponse.ok || !wishlistResponse.ok) throw new Error('The collection server is unavailable.')
+        const [cards, savedWishlist] = await Promise.all([collectionResponse.json(), wishlistResponse.json()])
+        const normalizedWishlist = normalizeWishlist(savedWishlist)
+        setWishlist(normalizedWishlist)
+        localStorage.setItem('mtg-wishlist', JSON.stringify(normalizedWishlist))
+        return cards
+      }).then(cards => {
         const savedCollection = normalizeCollection(cards)
         if(savedCollection.length === 0 && localCollection.length > 0){
           return Promise.all(localCollection.map(card => fetch(`${API_BASE}/api/collection`, {
@@ -158,6 +192,7 @@ function App(){
         setCollectionState('ready')
       })
       .catch(error => {
+        setWishlist(localWishlist)
         setCollection(localCollection)
         setCollectionState('offline')
         setCollectionError(`${error.message} Using your local copy for now.`)
@@ -174,17 +209,18 @@ function App(){
 
   return <div className="app">
     <header className="hero"><div><p className="eyebrow">CARD LIBRARY / 01</p><h1>Keep your cardboard <em>close.</em></h1><p className="hero-copy">Search the multiverse, save what you own, and see your collection take shape.</p></div><div className="hero-mark" aria-hidden="true">✦</div></header>
-    <section className="stats" aria-label="Collection summary"><div><strong>{totalCards}</strong><span>cards owned</span></div><div><strong>{collection.length}</strong><span>unique cards</span></div><div><strong>{colorsInCollection.length || '—'}</strong><span>colors represented</span></div></section>
+    <section className="stats" aria-label="Collection summary"><div><strong>{totalCards}</strong><span>cards owned</span></div><div><strong>{collection.length}</strong><span>unique cards</span></div><div><strong>{wishlist.length}</strong><span>wishlist cards</span></div><div><strong>{colorsInCollection.length || '—'}</strong><span>colors represented</span></div></section>
     <main>
       <section className="search-panel"><div className="section-heading"><div><p className="eyebrow">DISCOVER</p><h2>Find your next card</h2></div><span className="api-note">Powered by Scryfall</span></div><form className="search" onSubmit={search}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Try “lightning bolt” or “legendary elf”" aria-label="Search cards" /><button type="submit" disabled={searchState === 'loading'}>{searchState === 'loading' ? 'Searching…' : 'Search cards'}</button></form><div className="filters"><div className="filter-group"><label>Colors</label><div className="color-buttons">{['W', 'U', 'B', 'R', 'G'].map(color => <button type="button" key={color} className={`color-btn ${colorClasses[color]} ${filters.colors.includes(color) ? 'active' : ''}`} onClick={() => toggleColor(color)} title={colorNames[color]} aria-pressed={filters.colors.includes(color)}>{color}</button>)}</div></div><div className="filter-group type-filter"><label>Card type</label><div className="type-buttons">{['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'].map(type => <button type="button" key={type} className={`type-btn ${filters.types.includes(type) ? 'active' : ''}`} onClick={() => toggleType(type)} aria-pressed={filters.types.includes(type)}>{type}</button>)}</div></div><div className="compact-filters"><label>Rarity<select value={filters.rarity} onChange={e => setFilters(prev => ({...prev, rarity: e.target.value}))}><option value="">Any rarity</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="mythic">Mythic</option></select></label><label>Max mana<input type="number" min="0" max="20" value={filters.manaMax} onChange={e => setFilters(prev => ({...prev, manaMax: e.target.value}))} placeholder="Any" /></label></div></div></section>
-      <section className="results"><div className="section-heading"><div><p className="eyebrow">SEARCH RESULTS</p><h2>{searchState === 'success' ? `${totalResults.toLocaleString()} cards found` : 'A whole multiverse'}</h2></div></div>{searchState === 'idle' && <div className="empty-state"><span>✦</span><p>Search for a card to begin exploring.</p></div>}{searchState === 'error' && <div className="message error-message">{searchError}</div>}{searchState === 'success' && results.length === 0 && <div className="empty-state"><span>⌁</span><p>No cards matched those filters. Try a broader search.</p></div>}<div className="card-grid">{results.map(card => <CardTile key={card.id} card={card} actionLabel="Add to collection" onAction={() => add(card)} />)}</div>{searchError && searchState === 'success' && <div className="message error-message">{searchError}</div>}{nextPage && <button className="load-more" type="button" onClick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more cards…' : `Load more cards (${results.length} of ${totalResults.toLocaleString()})`}</button>}</section>
+      <section className="results"><div className="section-heading"><div><p className="eyebrow">SEARCH RESULTS</p><h2>{searchState === 'success' ? `${totalResults.toLocaleString()} cards found` : 'A whole multiverse'}</h2></div></div>{searchState === 'idle' && <div className="empty-state"><span>✦</span><p>Search for a card to begin exploring.</p></div>}{searchState === 'error' && <div className="message error-message">{searchError}</div>}{searchState === 'success' && results.length === 0 && <div className="empty-state"><span>⌁</span><p>No cards matched those filters. Try a broader search.</p></div>}<div className="card-grid">{results.map(card => <CardTile key={card.id} card={card} actionLabel="Add to collection" onAction={() => add(card)} wishlistActive={wishlist.some(item => item.id === card.id)} onWishlist={() => toggleWishlist(card)} />)}</div>{searchError && searchState === 'success' && <div className="message error-message">{searchError}</div>}{nextPage && <button className="load-more" type="button" onClick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more cards…' : `Load more cards (${results.length} of ${totalResults.toLocaleString()})`}</button>}</section>
       <section className="collection"><div className="section-heading collection-heading"><div><p className="eyebrow">YOUR BINDER</p><h2>My collection <span>{totalCards}</span></h2></div><label className="sort-control">Sort by<select value={sortBy} onChange={e => setSortBy(e.target.value)}><option value="name">Name</option><option value="quantity">Quantity</option><option value="rarity">Rarity</option></select></label></div>{collectionState === 'loading' && <div className="message">Loading your saved collection…</div>}{collectionError && <div className="message error-message">{collectionError}</div>}{collection.length === 0 && collectionState !== 'loading' && <div className="empty-state collection-empty"><span>＋</span><p>Your collection is waiting for its first card.</p></div>}<div className="collection-list">{sortedCollection.map(card => <article key={card.id} className="collection-card"><img src={cardImage(card)} alt="" /><div className="collection-card-info"><strong>{card.name}</strong><span>{card.set_name || card.set?.toUpperCase()} · {card.rarity}</span></div><div className="quantity" aria-label={`${card.quantity} copies of ${card.name}`}><button onClick={() => changeQuantity(card.id, -1)} aria-label={`Remove one ${card.name}`}>−</button><strong>{card.quantity}</strong><button onClick={() => changeQuantity(card.id, 1)} aria-label={`Add one ${card.name}`}>＋</button></div></article>)}</div></section>
+      <section className="wishlist"><div className="section-heading"><div><p className="eyebrow">WANTED LIST</p><h2>Wishlist <span>{wishlist.length}</span></h2></div><p className="wishlist-note">Save cards to remember what to trade for next.</p></div>{wishlist.length === 0 ? <div className="empty-state"><span>☆</span><p>Nothing here yet. Tap the star on a search result.</p></div> : <div className="wishlist-list">{wishlist.map(card => <article key={card.id} className="wishlist-card"><img src={cardImage(card)} alt="" /><div><strong>{card.name}</strong><span>{card.set_name || card.set?.toUpperCase()} · {card.rarity}</span></div><button type="button" onClick={() => toggleWishlist(card)} aria-label={`Remove ${card.name} from wishlist`}>Remove</button></article>)}</div>}</section>
     </main><footer>Built for the cards you actually play with.</footer>
   </div>
 }
 
-function CardTile({ card, actionLabel, onAction }){
-  return <article className="card-tile"><div className="card-image-wrap"><img src={cardImage(card)} alt={`${card.name} card art`} /><span className={`rarity-dot ${card.rarity}`}></span></div><div className="card-tile-body"><div><h3>{card.name}</h3><p>{card.type_line}</p></div><button onClick={onAction}>{actionLabel}</button></div></article>
+function CardTile({ card, actionLabel, onAction, wishlistActive, onWishlist }){
+  return <article className="card-tile"><div className="card-image-wrap"><img src={cardImage(card)} alt={`${card.name} card art`} /><span className={`rarity-dot ${card.rarity}`}></span><button className={`wishlist-button ${wishlistActive ? 'active' : ''}`} type="button" onClick={onWishlist} aria-label={`${wishlistActive ? 'Remove' : 'Add'} ${card.name} ${wishlistActive ? 'from' : 'to'} wishlist`} aria-pressed={wishlistActive}>☆</button></div><div className="card-tile-body"><div><h3>{card.name}</h3><p>{card.type_line}</p></div><div className="card-actions"><button onClick={onAction}>{actionLabel}</button><button className="wishlist-action" type="button" onClick={onWishlist}>{wishlistActive ? 'Wishlisted' : 'Add to wishlist'}</button></div></div></article>
 }
 
 export default App

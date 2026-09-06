@@ -11,7 +11,7 @@ h1{ max-width: 650px; margin-bottom: 14px; color: #fff9e9; font-size: clamp(40px
 h1 em{ color: #c9af65; font-style: italic }
 .hero-copy{ max-width: 420px; margin-bottom: 0; color: #bdb8a8; font: 16px/1.5 Arial, sans-serif }
 .hero-mark{ color: #c9af65; font-size: 78px; line-height: 1; transform: rotate(15deg); opacity: .8 }
-.stats{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 0 0 56px; background: #77705955 }
+.stats{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0 0 56px; background: #77705955 }
 .stats div{ display: flex; align-items: baseline; gap: 10px; padding: 20px 18px; background: #22231e }
 .stats strong{ color: #e6ce82; font-size: 30px; font-weight: 400 }
 .stats span, .api-note, .collection-card-info span, footer{ color: #9d9a8d; font: 11px/1.4 Arial, sans-serif; letter-spacing: .7px; text-transform: uppercase }
@@ -43,10 +43,13 @@ h2{ margin-bottom: 0; color: #fff9e9; font-size: 30px; font-weight: 400; letter-
 .card-image-wrap img{ width: 100%; height: 100%; display: block; object-fit: cover }
 .rarity-dot{ position: absolute; top: 10px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: #c5c2b4; box-shadow: 0 0 0 3px #17181499 }
 .rarity-dot.rare{ background: #b9c3c6 }.rarity-dot.mythic{ background: #d38b57 }
+.wishlist-button{ position: absolute; top: 16px; left: 12px; width: 28px; height: 28px; padding: 0; color: #fff9e9; background: #171814bb; border: 1px solid #fff9e988; border-radius: 50%; font-size: 20px; line-height: 1 }
+.wishlist-button.active, .wishlist-button:hover{ color: #1a1b16; background: #c9af65; border-color: #c9af65 }
 .card-tile-body{ display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px }
+.card-actions{ display: grid; flex: 0 0 104px; gap: 6px }
 .card-tile h3{ overflow: hidden; margin-bottom: 5px; color: #fff9e9; font-size: 17px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap }
 .card-tile p{ overflow: hidden; margin-bottom: 0; color: #9d9a8d; font: 11px Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap }
-.card-tile-body button{ padding: 9px 10px; white-space: nowrap; font-size: 10px }
+.card-tile-body button{ padding: 9px 10px; white-space: nowrap; font-size: 10px }.card-actions .wishlist-action{ color: #c9af65; background: transparent; border: 1px solid #77705988 }.card-actions .wishlist-action:hover{ color: #1a1b16; background: #c9af65 }
 .empty-state{ padding: 48px 20px; color: #9d9a8d; text-align: center; background: #22231e; border: 1px dashed #77705988; font: 14px Arial, sans-serif }
 .empty-state span{ display: block; margin-bottom: 12px; color: #c9af65; font: 30px Georgia, serif }
 .empty-state p{ margin-bottom: 0 }
@@ -61,6 +64,10 @@ h2{ margin-bottom: 0; color: #fff9e9; font-size: 30px; font-weight: 400; letter-
 .collection-card img{ width: 47px; height: 65px; object-fit: cover }
 .collection-card-info{ display: grid; min-width: 0; flex: 1; gap: 7px }.collection-card-info strong{ overflow: hidden; color: #fff9e9; font-size: 16px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap }.collection-card-info span{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0 }
 .quantity{ display: flex; align-items: center; gap: 11px }.quantity strong{ min-width: 18px; color: #e6ce82; text-align: center; font-size: 17px; font-weight: 400 }.quantity button{ width: 26px; height: 26px; padding: 0; color: #d6d0bd; background: transparent; border: 1px solid #77705988; font-size: 18px; line-height: 1 }.quantity button:hover{ color: #1a1b16; background: #c9af65 }
+.wishlist-note{ margin: 0; color: #9d9a8d; font: 14px/1.4 Arial, sans-serif }
+.wishlist-list{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px }
+.wishlist-card{ display: flex; align-items: center; gap: 14px; min-width: 0; padding: 8px; background: #26271f; border: 1px solid #77705955 }
+.wishlist-card img{ width: 47px; height: 65px; object-fit: cover }.wishlist-card div{ display: grid; min-width: 0; flex: 1; gap: 7px }.wishlist-card strong{ overflow: hidden; color: #fff9e9; font-size: 16px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap }.wishlist-card span{ overflow: hidden; color: #9d9a8d; font: 11px Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap }.wishlist-card button{ padding: 8px 10px; color: #c9af65; background: transparent; border: 1px solid #77705988; font: 11px Arial, sans-serif }.wishlist-card button:hover{ color: #1a1b16; background: #c9af65 }
 footer{ padding: 50px 0 20px; text-align: center; text-transform: none; letter-spacing: 0 }
 @media (max-width: 850px){ .filters{ grid-template-columns: 1fr; gap: 18px }.compact-filters{ max-width: 280px }.card-grid{ grid-template-columns: repeat(3, 1fr) } }
-@media (max-width: 620px){ .app{ padding: 24px 16px }.hero{ padding-bottom: 32px }.hero-mark{ display: none }.stats{ margin-bottom: 36px }.stats div{ display: grid; gap: 4px; padding: 14px 10px }.stats strong{ font-size: 24px }.stats span{ font-size: 9px }.search-panel{ padding: 20px 16px }.section-heading{ align-items: start; flex-direction: column; gap: 10px }.search{ flex-direction: column }.search button{ min-height: 46px }.card-grid{ grid-template-columns: repeat(2, 1fr); gap: 10px }.card-tile-body{ display: block; padding: 10px }.card-tile-body button{ width: 100%; margin-top: 12px }.collection-list{ grid-template-columns: 1fr }.collection-heading{ flex-direction: row; align-items: end } }
+@media (max-width: 620px){ .app{ padding: 24px 16px }.hero{ padding-bottom: 32px }.hero-mark{ display: none }.stats{ grid-template-columns: repeat(2, 1fr); margin-bottom: 36px }.stats div{ display: grid; gap: 4px; padding: 14px 10px }.stats strong{ font-size: 24px }.stats span{ font-size: 9px }.search-panel{ padding: 20px 16px }.section-heading{ align-items: start; flex-direction: column; gap: 10px }.search{ flex-direction: column }.search button{ min-height: 46px }.card-grid{ grid-template-columns: repeat(2, 1fr); gap: 10px }.card-tile-body{ display: block; padding: 10px }.card-tile-body button{ width: 100%; margin-top: 12px }.card-actions{ margin-top: 12px }.card-actions button{ margin-top: 0 }.collection-list, .wishlist-list{ grid-template-columns: 1fr }.collection-heading{ flex-direction: row; align-items: end } }
