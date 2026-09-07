@@ -9,7 +9,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', process.env.CLIENT_ORIGIN || 'http://localhost:5173');
+  const origin = req.headers.origin;
+  const configuredOrigin = process.env.CLIENT_ORIGIN;
+  const localOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
+  if (origin && (origin === configuredOrigin || (!configuredOrigin && localOrigin))) res.header('Access-Control-Allow-Origin', origin);
+  else res.header('Access-Control-Allow-Origin', configuredOrigin || 'http://localhost:5173');
+  res.header('Vary', 'Origin');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -35,6 +40,11 @@ async function initializeDatabase(){
       card_json TEXT NOT NULL,
       quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
       added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS decks (
+      id TEXT PRIMARY KEY,
+      deck_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
   try { await db.exec('ALTER TABLE wishlist ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0)'); } catch(err) {
@@ -217,6 +227,52 @@ app.delete('/api/wishlist/:id', async (req, res) => {
   try {
     const db = await database;
     const result = await db.run('DELETE FROM wishlist WHERE id = ?', req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ deleted: req.params.id });
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/decks', async (req, res) => {
+  try {
+    const db = await database;
+    const rows = await db.all('SELECT deck_json FROM decks ORDER BY updated_at DESC');
+    res.json(rows.map(row => JSON.parse(row.deck_json)));
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/decks', async (req, res) => {
+  const deck = req.body.deck;
+  if (!deck?.id || !deck.name) return res.status(400).json({ error: 'deck with an id and name is required' });
+  try {
+    const db = await database;
+    await db.run('INSERT INTO decks (id, deck_json, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)', deck.id, JSON.stringify(deck));
+    res.status(201).json(deck);
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.put('/api/decks/:id', async (req, res) => {
+  const deck = { ...req.body.deck, id: req.params.id };
+  if (!deck.name) return res.status(400).json({ error: 'deck name is required' });
+  try {
+    const db = await database;
+    const result = await db.run('UPDATE decks SET deck_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', JSON.stringify(deck), req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+    res.json(deck);
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/decks/:id', async (req, res) => {
+  try {
+    const db = await database;
+    const result = await db.run('DELETE FROM decks WHERE id = ?', req.params.id);
     if (result.changes === 0) return res.status(404).json({ error: 'not found' });
     res.json({ deleted: req.params.id });
   } catch(err) {
