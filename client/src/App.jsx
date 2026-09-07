@@ -27,22 +27,52 @@ function cardPrice(card){
 }
 
 function parseCsv(text){
+  const sanitized = String(text || '').replace(/^\uFEFF/, '')
   const rows = []
   let row = [], value = '', quoted = false
-  for(let index = 0; index < text.length; index += 1){
-    const character = text[index]
-    if(character === '"' && text[index + 1] === '"'){ value += '"'; index += 1 }
+  for(let index = 0; index < sanitized.length; index += 1){
+    const character = sanitized[index]
+    if(character === '"' && sanitized[index + 1] === '"'){ value += '"'; index += 1 }
     else if(character === '"') quoted = !quoted
     else if(character === ',' && !quoted){ row.push(value.trim()); value = '' }
     else if((character === '\n' || character === '\r') && !quoted){
-      if(character === '\r' && text[index + 1] === '\n') index += 1
+      if(character === '\r' && sanitized[index + 1] === '\n') index += 1
       row.push(value.trim()); if(row.some(Boolean)) rows.push(row); row = []; value = ''
     } else value += character
   }
   row.push(value.trim()); if(row.some(Boolean)) rows.push(row)
   if(rows.length < 2) return []
   const headers = rows[0].map(header => header.toLowerCase().replace(/[^a-z0-9]+/g, ''))
-  return rows.slice(1).map(values => headers.reduce((record, header, index) => ({ ...record, [header]: values[index] || '' }), {}))
+  return rows.slice(1).map(values => headers.reduce((record, header, index) => ({ ...record, [header]: values[index] ?? '' }), {}))
+}
+
+function normalizeImportValue(value){
+  return String(value ?? '').trim().replace(/^\uFEFF/, '').replace(/\s+/g, ' ')
+}
+
+function normalizeCardName(value){
+  return normalizeImportValue(value).toLowerCase().replace(/['’]/g, '')
+}
+
+async function sleep(ms){
+  await new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function fetchWithBackoff(url, options = {}, maxRetries = 10){
+  let attempt = 0
+  while(true){
+    const response = await fetch(url, options)
+    if((response.status === 429 || (response.status >= 500 && response.status < 600)) && attempt < maxRetries){
+      const retryAfterHeader = Number(response.headers.get('retry-after') || '0')
+      const baseDelay = retryAfterHeader > 0 ? retryAfterHeader * 1000 : 750 * (2 ** attempt)
+      const jitter = Math.random() * 500
+      const delay = baseDelay + jitter
+      await sleep(delay)
+      attempt += 1
+      continue
+    }
+    return response
+  }
 }
 
 function App(){
@@ -251,28 +281,80 @@ function App(){
     if(!file) return
     setImportState('Reading ManaBox export…')
     const rows = parseCsv(await file.text())
-    const validRows = rows.filter(row => row.name || row.cardname)
+    const validRows = rows.filter(row => normalizeImportValue(row.name || row.cardname))
     let imported = 0, skipped = rows.length - validRows.length
     const resolvedCards = []
-    for(let start = 0; start < validRows.length; start += 75){
-      const batch = validRows.slice(start, start + 75)
-      const identifiers = batch.map(row => row.setcode && row.collectornumber ? { set: row.setcode, collector_number: row.collectornumber } : { name: row.name || row.cardname })
-      try {
-        const response = await fetch('https://api.scryfall.com/cards/collection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifiers }) })
-        if(!response.ok) throw new Error(`Scryfall import failed (${response.status}).`)
-        const json = await response.json()
-        const found = json.data || []
-        batch.forEach((row, index) => {
-          const identifier = identifiers[index]
-          const card = identifier.set ? found.find(item => item.set === identifier.set && item.collector_number === identifier.collector_number) : found.find(item => item.name.toLowerCase() === (identifier.name || '').toLowerCase())
-          if(card) resolvedCards.push({ card, row })
-          else skipped += 1
-        })
-      } catch { skipped += batch.length }
-      if(start + 75 < validRows.length) await new Promise(resolve => setTimeout(resolve, 100))
-      setImportState(`Resolved ${Math.min(start + 75, validRows.length)} of ${validRows.length} rows…`)
+    const batchSize = 75
+
+    for(let start = 0; start < validRows.length;){
+      const batch = validRows.slice(start, start + batchSize)
+      const identifiers = batch.map(row => {
+        const rowName = normalizeImportValue(row.name || row.cardname)
+        const setCode = normalizeImportValue(row.setcode || row.set)
+        const collectorNumber = normalizeImportValue(row.collectornumber || row.collector_number)
+        return setCode && collectorNumber ? { set: setCode, collector_number: collectorNumber } : { name: rowName }
+      })
+
+      let batchSucceeded = false
+      let retryCount = 0
+      let retryDelay = 1500
+
+while(!batchSucceeded && retryCount <= 10){
+            try {
+              const response = await fetchWithBackoff('https://api.scryfall.com/cards/collection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifiers })
+              }, 10)
+
+          if(!response.ok) {
+            const payload = await response.json().catch(() => ({}))
+            throw new Error(payload.details || `Scryfall import failed (${response.status}).`)
+          }
+
+          const json = await response.json()
+          const found = json.data || []
+          batch.forEach((row, index) => {
+            const identifier = identifiers[index]
+            const card = identifier.set
+              ? found.find(item => normalizeCardName(item.name) === normalizeCardName(row.name || row.cardname) && String(item.set || '').toLowerCase() === String(identifier.set).toLowerCase() && String(item.collector_number || '').replace(/^0+/, '') === String(identifier.collector_number).replace(/^0+/, ''))
+              : found.find(item => normalizeCardName(item.name) === normalizeCardName(identifier.name || row.name || row.cardname))
+            if(card) resolvedCards.push({ card, row })
+            else skipped += 1
+          })
+
+          batchSucceeded = true
+        } catch(error) {
+          retryCount += 1
+          if(retryCount > 10) {
+            console.error('ManaBox import batch failed after retries:', error)
+            skipped += batch.length
+            batchSucceeded = true
+            break
+          }
+          const retryAfterHeader = error?.response?.headers?.get?.('retry-after')
+          const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : retryDelay
+          const jitter = Math.random() * 500
+          setImportState(`Scryfall rate limit hit; retrying batch in ${Math.round((retryAfterMs + jitter) / 1000)}s (${retryCount}/6)…`)
+          await sleep(retryAfterMs + jitter)
+          retryDelay *= 2
+        }
+      }
+
+      const currentCount = Math.min(start + batch.length, validRows.length)
+      setImportState(`Resolved ${currentCount} of ${validRows.length} rows…`)
+      start += batch.length
+      if(start < validRows.length) await sleep(150)
     }
-    const importedCards = resolvedCards.map(({ card, row }) => ({ ...card, condition: row.condition || undefined, language: row.language || undefined, foil: /^(true|yes|1|foil)$/i.test(row.foil || ''), quantity: Math.max(1, Number(row.quantity) || 1) }))
+
+    const importedCards = resolvedCards.map(({ card, row }) => ({
+      ...card,
+      condition: normalizeImportValue(row.condition || row.conditionname || row.cond) || undefined,
+      language: normalizeImportValue(row.language || row.lang) || undefined,
+      foil: /^(true|yes|1|foil)$/i.test(normalizeImportValue(row.foil || row.f))
+        || normalizeImportValue(row.foil || row.f).toLowerCase() === 'foil',
+      quantity: Math.max(1, Number(row.quantity) || 1)
+    }))
     const nextCollection = normalizeCollection([...collection, ...importedCards])
     updateCollection(nextCollection)
     for(const item of importedCards) {
@@ -463,7 +545,7 @@ function App(){
     <main>
       <section className="collection-import"><div className="section-heading"><div><p className="eyebrow">COLLECTION TOOLS</p><h2>Import your binder</h2></div><span className="api-note">ManaBox CSV</span></div><label className="import-button">Import ManaBox CSV<input type="file" accept=".csv,text/csv" onChange={importManaBox} /></label>{importState && <div className="message">{importState}</div>}</section>
       {activeDeck && <section className="deck-suggestions"><div className="section-heading"><div><p className="eyebrow">DECK INPUT</p><h2>Add search results to {activeDeck.name}</h2></div><span className="api-note">{results.length ? 'Choose a card below' : 'Search for cards above'}</span></div><div className="suggestion-list">{results.slice(0, 8).map(card => <button type="button" key={card.id} onClick={() => addToDeck(card)}><span>{card.name}</span><small>{card.type_line}</small></button>)}</div></section>}
-      <section className="decks"><div className="section-heading"><div><p className="eyebrow">DECK LAB</p><h2>Build a deck</h2></div><span className="api-note">{activeDeck ? `${activeDeck.cards.length} cards · $${deckPrice.toFixed(2)} estimate` : 'Create a deck to start'}</span></div><form className="deck-create" onSubmit={createDeck}><input value={deckName} onChange={event => setDeckName(event.target.value)} placeholder="Deck name" aria-label="Deck name" /><select value={deckFormat} onChange={event => setDeckFormat(event.target.value)} aria-label="Deck format"><option value="commander">Commander</option><option value="modern">Modern</option><option value="standard">Standard</option><option value="casual">Casual</option></select><button type="submit">New deck</button><label className="import-button">Import ManaBox CSV<input type="file" accept=".csv,text/csv" onChange={importManaBox} /></label></form>{importState && <div className="message">{importState}</div>}{decks.length > 0 && <div className="deck-workspace"><label className="deck-picker">Active deck<select value={activeDeckId} onChange={event => setActiveDeckId(event.target.value)}>{decks.map(deck => <option key={deck.id} value={deck.id}>{deck.name} · {deck.format}</option>)}</select></label>{activeDeck && <><div className="deck-list">{activeDeck.cards.length === 0 ? <span className="deck-empty">Add cards from search results with “Add to deck”.</span> : activeDeck.cards.map(item => <div className="deck-card" key={item.card.id}><span>{item.quantity}× {item.card.name}</span><span>{cardPrice(item.card) ? `$${(cardPrice(item.card) * item.quantity).toFixed(2)}` : 'No price'}</span></div>)}</div><div className="assistant"><div className="assistant-heading"><div><p className="eyebrow">CARD ASSISTANT</p><h3>Related cards</h3></div><button type="button" onClick={loadAssistant}>Find suggestions</button><a href={activeDeck.cards.find(item => item.card.type_line?.includes('Legendary Creature')) ? `https://edhrec.com/commanders/${activeDeck.cards.find(item => item.card.type_line?.includes('Legendary Creature')).card.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : 'https://edhrec.com'} target="_blank" rel="noreferrer">Open EDHREC</a></div>{assistantResults.length > 0 && <div className="assistant-list">{assistantResults.map(card => <button type="button" key={card.id} onClick={() => addToDeck(card)}>{card.name}<span>{card.type_line}</span></button>)}</div>}</div></>}</div>}</section>
+      <section className="decks"><div className="section-heading"><div><p className="eyebrow">DECK LAB</p><h2>Build a deck</h2></div><span className="api-note">{activeDeck ? `${activeDeck.cards.length} cards · $${deckPrice.toFixed(2)} estimate` : 'Create a deck to start'}</span></div><form className="deck-create" onSubmit={createDeck}><input value={deckName} onChange={event => setDeckName(event.target.value)} placeholder="Deck name" aria-label="Deck name" /><select value={deckFormat} onChange={event => setDeckFormat(event.target.value)} aria-label="Deck format"><option value="commander">Commander</option><option value="modern">Modern</option><option value="standard">Standard</option><option value="casual">Casual</option></select><button type="submit">New deck</button></form>{decks.length > 0 && <div className="deck-workspace"><label className="deck-picker">Active deck<select value={activeDeckId} onChange={event => setActiveDeckId(event.target.value)}>{decks.map(deck => <option key={deck.id} value={deck.id}>{deck.name} · {deck.format}</option>)}</select></label>{activeDeck && <><div className="deck-list">{activeDeck.cards.length === 0 ? <span className="deck-empty">Add cards from search results with “Add to deck”.</span> : activeDeck.cards.map(item => <div className="deck-card" key={item.card.id}><span>{item.quantity}× {item.card.name}</span><span>{cardPrice(item.card) ? `$${(cardPrice(item.card) * item.quantity).toFixed(2)}` : 'No price'}</span></div>)}</div><div className="assistant"><div className="assistant-heading"><div><p className="eyebrow">CARD ASSISTANT</p><h3>Related cards</h3></div><button type="button" onClick={loadAssistant}>Find suggestions</button><a href={activeDeck.cards.find(item => item.card.type_line?.includes('Legendary Creature')) ? `https://edhrec.com/commanders/${activeDeck.cards.find(item => item.card.type_line?.includes('Legendary Creature')).card.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : 'https://edhrec.com'} target="_blank" rel="noreferrer">Open EDHREC</a></div>{assistantResults.length > 0 && <div className="assistant-list">{assistantResults.map(card => <button type="button" key={card.id} onClick={() => addToDeck(card)}>{card.name}<span>{card.type_line}</span></button>)}</div>}</div></>}</div>}</section>
       <section className="search-panel"><div className="section-heading"><div><p className="eyebrow">DISCOVER</p><h2>Find your next card</h2></div><span className="api-note">Powered by Scryfall · updates as you type</span></div><form className="search" onSubmit={search}><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Try “lightning bolt” or “legendary elf”" aria-label="Search cards" /><button type="submit" disabled={searchState === 'loading'}>{searchState === 'loading' ? 'Searching…' : 'Search now'}</button></form><div className="filters"><div className="filter-group"><label>Colors</label><div className="color-buttons">{['W', 'U', 'B', 'R', 'G'].map(color => <button type="button" key={color} className={`color-btn ${colorClasses[color]} ${filters.colors.includes(color) ? 'active' : ''}`} onClick={() => toggleColor(color)} title={colorNames[color]} aria-pressed={filters.colors.includes(color)}>{color}</button>)}</div></div><div className="filter-group type-filter"><label>Card type</label><div className="type-buttons">{['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'].map(type => <button type="button" key={type} className={`type-btn ${filters.types.includes(type) ? 'active' : ''}`} onClick={() => toggleType(type)} aria-pressed={filters.types.includes(type)}>{type}</button>)}</div></div><div className="compact-filters"><label>Rarity<select value={filters.rarity} onChange={e => setFilters(prev => ({...prev, rarity: e.target.value}))}><option value="">Any rarity</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="mythic">Mythic</option></select></label><label>Min mana<input type="number" min="0" max="20" value={filters.manaMin} onChange={e => setFilters(prev => ({...prev, manaMin: e.target.value}))} placeholder="Any" /></label><label>Max mana<input type="number" min="0" max="20" value={filters.manaMax} onChange={e => setFilters(prev => ({...prev, manaMax: e.target.value}))} placeholder="Any" /></label></div><div className="advanced-filters"><label>Oracle text<input value={filters.oracle} onChange={e => setFilters(prev => ({...prev, oracle: e.target.value}))} placeholder="draw a card" /></label><label>Set code<input value={filters.set} onChange={e => setFilters(prev => ({...prev, set: e.target.value}))} placeholder="set code" maxLength="5" /></label><label>Format<select value={filters.format} onChange={e => setFilters(prev => ({...prev, format: e.target.value}))}><option value="">Any format</option><option value="commander">Commander</option><option value="standard">Standard</option><option value="modern">Modern</option><option value="pioneer">Pioneer</option><option value="pauper">Pauper</option><option value="legacy">Legacy</option></select></label></div></div></section>
       <section className={`results drop-zone ${dragTarget === 'search' ? 'drag-target' : ''}`} onDragOver={event => allowDrop(event, 'search')} onDragLeave={() => setDragTarget('')} onDrop={event => dropCard(event, 'search')}><div className="section-heading"><div><p className="eyebrow">SEARCH RESULTS</p><h2>{searchState === 'success' ? `${totalResults.toLocaleString()} cards found` : 'A whole multiverse'}</h2></div><span className="drag-hint">Drag cards to your binder or wishlist</span></div>{searchState === 'idle' && <div className="empty-state"><span>✦</span><p>Search for a card to begin exploring.</p></div>}{searchState === 'error' && <div className="message error-message">{searchError}</div>}{searchState === 'success' && results.length === 0 && <div className="empty-state"><span>⌁</span><p>No cards matched those filters. Try a broader search.</p></div>}<div className="card-grid">{results.map(card => <CardTile key={card.id} card={card} actionLabel="Add to collection" onAction={() => add(card)} wishlistActive={wishlist.some(item => item.id === card.id)} onWishlist={() => toggleWishlist(card)} onDragStart={event => startDrag(event, card, 'search')} onDragEnd={endDrag} />)}</div>{searchError && searchState === 'success' && <div className="message error-message">{searchError}</div>}{nextPage && <button className="load-more" type="button" onClick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? 'Loading more cards…' : `Load more cards (${results.length} of ${totalResults.toLocaleString()})`}</button>}</section>
       <section className={`collection drop-zone ${dragTarget === 'collection' ? 'drag-target' : ''}`} onDragOver={event => allowDrop(event, 'collection')} onDragLeave={() => setDragTarget('')} onDrop={event => dropCard(event, 'collection')}><div className="section-heading collection-heading"><div><p className="eyebrow">YOUR BINDER</p><h2>My collection <span>{totalCards}</span></h2></div><label className="sort-control">Sort by<select value={sortBy} onChange={e => setSortBy(e.target.value)}><option value="name">Name</option><option value="quantity">Quantity</option><option value="rarity">Rarity</option></select></label></div><input className="local-search" value={collectionQuery} onChange={event => setCollectionQuery(event.target.value)} placeholder="Search your collection" aria-label="Search your collection" />{collectionState === 'loading' && <div className="message">Loading your saved collection…</div>}{collectionError && <div className="message error-message">{collectionError}</div>}{collection.length === 0 && collectionState !== 'loading' && <div className="empty-state collection-empty"><span>＋</span><p>Your collection is waiting for its first card.</p></div>}{collection.length > 0 && visibleCollection.length === 0 && <div className="empty-state"><p>No owned cards match that search.</p></div>}<div className="collection-list">{visibleCollection.map(card => <article key={card.id} className="collection-card" draggable onDragStart={event => startDrag(event, card, 'collection')} onDragEnd={endDrag}><img src={cardImage(card)} alt="" /><div className="collection-card-info"><strong>{card.name}</strong><span>{card.set_name || card.set?.toUpperCase()} · {card.rarity} · {card.condition || 'Near Mint'}{card.foil ? ' · Foil' : ''}</span></div><div className="quantity" aria-label={`${card.quantity} copies of ${card.name}`}><button onClick={() => changeQuantity(card.id, -1)} aria-label={`Remove one ${card.name}`}>−</button><strong>{card.quantity}</strong><button onClick={() => changeQuantity(card.id, 1)} aria-label={`Add one ${card.name}`}>＋</button></div><button className="edit-button" type="button" onClick={() => openEditor(card, 'collection')}>Edit</button></article>)}</div></section>
