@@ -181,7 +181,7 @@ function App() {
   const [searchError, setSearchError] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [groupPrintings, setGroupPrintings] = useState(false);
-  const [activeView, setActiveView] = useState("collection");
+  const [activeView, setActiveView] = useState("search");
   const [deckMode, setDeckMode] = useState("all");
   const [deckQuery, setDeckQuery] = useState("");
   const [deckResults, setDeckResults] = useState([]);
@@ -1105,8 +1105,10 @@ function App() {
   return (
     <div className="app">
       <nav className="app-nav" aria-label="Primary navigation">
+        <button className={activeView === "search" ? "active" : ""} type="button" onClick={() => setActiveView("search")}>Search</button>
         <button className={activeView === "collection" ? "active" : ""} type="button" onClick={() => setActiveView("collection")}>Collection</button>
         <button className={activeView === "deck-builder" ? "active" : ""} type="button" onClick={() => setActiveView("deck-builder")}>Deck builder</button>
+        <button className={activeView === "wishlist" ? "active" : ""} type="button" onClick={() => setActiveView("wishlist")}>Wishlist</button>
       </nav>
       {activeView === "deck-builder" && <DeckBuilderView
         decks={decks}
@@ -1136,7 +1138,7 @@ function App() {
         changeDeckQuantity={changeDeckQuantity}
         cardPrice={cardPrice}
       />}
-      {activeView === "collection" && <main>
+      {(activeView === "search" || activeView === "collection" || activeView === "wishlist") && <main>
         {false && activeDeck && (
           <section className="deck-suggestions">
             <div className="section-heading">
@@ -1282,7 +1284,7 @@ function App() {
             </div>
           )}
         </section>}
-        <section className="search-panel">
+        {activeView === "search" && <section className="search-panel">
           <div className="section-heading">
             <div>
               <h2>Search cards</h2>
@@ -1411,8 +1413,8 @@ function App() {
               </label>
             </div>
           </div>
-        </section>
-        <section
+        </section>}
+        {activeView === "search" && <section
           className={`results drop-zone ${dragTarget === "search" ? "drag-target" : ""}`}
           onDragOver={(event) => allowDrop(event, "search")}
           onDragLeave={() => setDragTarget("")}
@@ -1473,8 +1475,8 @@ function App() {
                 : `Load more cards (${results.length} of ${totalResults.toLocaleString()})`}
             </button>
           )}
-        </section>
-        <section
+        </section>}
+        {activeView === "collection" && <section
           className={`collection drop-zone ${dragTarget === "collection" ? "drag-target" : ""}`}
           onDragOver={(event) => allowDrop(event, "collection")}
           onDragLeave={() => setDragTarget("")}
@@ -1578,8 +1580,8 @@ function App() {
               </article>
             ))}
           </div>
-        </section>
-        <section
+        </section>}
+        {activeView === "wishlist" && <section
           className={`wishlist drop-zone ${dragTarget === "wishlist" ? "drag-target" : ""}`}
           onDragOver={(event) => allowDrop(event, "wishlist")}
           onDragLeave={() => setDragTarget("")}
@@ -1649,8 +1651,8 @@ function App() {
               ))}
             </div>
           )}
-        </section>
-        <details className="collection-import">
+        </section>}
+        {activeView === "collection" && <details className="collection-import">
           <summary>Collection tools</summary>
           <div className="section-heading">
             <div>
@@ -1667,7 +1669,7 @@ function App() {
             />
           </label>
           {importState && <div className="message">{importState}</div>}
-        </details>
+        </details>}
       </main>}
       {editing && (
         <div
