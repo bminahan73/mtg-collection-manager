@@ -1,0 +1,89 @@
+1 Cyclonic Rift (SOA) 14
+1 Namor the Sub-Mariner (MSH) 362
+1 Flusterstorm (SOA) 18
+1 Lord of Atlantis () 56
+1 Sol Ring (SOC) 128
+1 Desculpting Blast (EOE) 54
+1 Hardened Scales (SOC) 272
+1 Simic Ascendancy (BLC) 260
+1 Dreamroot Cascade (SOS) 254
+1 Preordain (SOA) 21
+1 Proctor's Gaze (SOS) 213
+1 Deeproot Waters (LCC) 152
+1 Singer of Swift Rivers (LCC) 98
+1 Simic Charm (CMR) 451
+1 Vorel of the Hull Clade (LCC) 294
+1 Growth Curve (SOS) 193
+1 Arixmethes, Slumbering Isle () 97
+1 Island (EOE) 263
+1 Sleight of Hand (SOA) 22
+1 Island (EOE) 269
+2 Island (EOE) 270
+3 Forest (EOE) 275
+3 Forest (EOE) 276
+1 Secluded Courtyard () 372
+1 Forest (SOS) 281
+1 Reliquary Tower (SOC) 398
+1 Path of Ancestry (SOC) 393
+1 Paradox Gardens (SOS) 258
+1 Body of Research (STX) 168
+1 Island (SOS) 274
+1 Breeding Pool (EOE) 251
+1 Hinterland Harbor (SOC) 381
+1 Vineglimmer Snarl (SOC) 420
+1 Temple of Mystery (SOC) 414
+1 Murkfiend Liege () 259
+1 Into the Roil (FDN) 509
+5 Island (LCI) 395
+1 Stonybrook Banneret (LCC) 173
+1 Ripples of Potential (EOC) 77
+1 Quandrix Command (SOC) 325
+1 Wistfulness (ECL) 252
+1 Kindred Discovery (LCC) 159
+1 Gift of the Viper (MH3) 156
+1 Reflections of Littjara (TDC) 164
+1 Kiora's Follower (LCC) 273
+1 Branching Evolution (MH3) 285
+1 Arcane Signet () 283
+1 Nicanzil, Current Conductor (LCI) 236
+1 Simic Signet () 252
+1 Terrasymbiosis (EOE) 312
+1 Artificial Evolution (ONS) 67
+1 Uro, Titan of Nature's Wrath () 222
+1 Vivid Grove () 445
+1 Emperor Mihail II (LCC) 155
+1 Llanowar Reborn (LCC) 341
+1 Tishana, Voice of Thunder (LCC) 291
+1 Island (SOS) 268
+4 Forest (LCI) 401
+1 Procrastinate (SOS) 64
+1 Explore (LCC) 241
+1 Metallic Mimic (LCC) 308
+1 Cold-Eyed Selkie () 218
+1 Quandrix Charm (SOS) 217
+1 Wave Goodbye (LCC) 47
+1 Herald of Secret Streams (LCC) 158
+1 Rhystic Study () 114
+1 Thassa's Oracle (THB) 73
+1 Mana Drain (CMR) 637
+1 Nesting Grounds (EOS) 31
+1 Necklace of Girion (HOC) 12
+1 Merrow Reejerey (LCC) 165
+1 Adrix and Nev, Twincasters (C21) 336
+1 Kumena, Tyrant of Orazca (LCC) 274
+1 Merfolk Skydiver (LCC) 277
+1 Topography Tracker (LCC) 95
+1 Mystic Remora (TLE) 16
+1 Absorbing Man (MSH) 199
+1 Rewrite History (MSH) 71
+1 Simic Growth Chamber () 298
+1 Mosswort Bridge (TDC) 379
+1 Vivid Creek () 444
+1 Pym Technologies (MSH) 271
+1 Mist Dancer (LCC) 76
+1 Hakbal of the Surging Soul (LCC) 3
+1 Descendants' Path (LCC) 238
+1 Mist-Cloaked Herald () 760
+1 Power Sink () 14
+1 Biosynthic Burst (EOE) 173
+
