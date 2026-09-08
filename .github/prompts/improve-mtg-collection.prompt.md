@@ -55,8 +55,7 @@ Do not add features just to increase surface area. Select one coherent vertical 
 - Implement the feature end to end, including persistence and API work where needed.
 - Add or update focused tests when a test setup exists; otherwise run the narrowest available build or validation command.
 - Verify the client with `npm run build` from `client/` and validate backend behavior with its existing scripts or a focused manual request when applicable.
-- When the slice uses the backend, also start it in the background with `npm start` from `backend/` (or an equivalent absolute-path command), keep it running, and report its API URL alongside the client preview.
-- Start the client locally in the background with `npm run dev -- --host 0.0.0.0` from `client/` after implementation. If the default port is busy, use the next available port. Keep the server running and report the exact local preview URL.
+- always run the frontend and backend server by using `docker compose up`.
 - Report what changed, how the data flows, what was validated, and any follow-up limitation. Do not claim a check passed if it was not run.
 
 When the requested idea is too broad, break it into a short sequence and implement only the first complete slice in this invocation. End with the next most valuable slice, not an unbounded feature list.
