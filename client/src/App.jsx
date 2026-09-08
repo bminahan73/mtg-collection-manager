@@ -8,6 +8,23 @@ const colorClasses = {
   R: "red",
   G: "green",
 };
+const cardTypes = [
+  "Artifact",
+  "Battle",
+  "Creature",
+  "Conspiracy",
+  "Dungeon",
+  "Enchantment",
+  "Instant",
+  "Kindred",
+  "Land",
+  "Phenomenon",
+  "Plane",
+  "Planeswalker",
+  "Scheme",
+  "Sorcery",
+  "Vanguard",
+];
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 function cardImage(card) {
@@ -149,6 +166,7 @@ function App() {
   const [dragTarget, setDragTarget] = useState("");
   const [editing, setEditing] = useState(null);
   const [printingPicker, setPrintingPicker] = useState(null);
+  const [deckPickerCard, setDeckPickerCard] = useState(null);
   const [decks, setDecks] = useState([]);
   const [activeDeckId, setActiveDeckId] = useState("");
   const [deckName, setDeckName] = useState("");
@@ -306,15 +324,6 @@ function App() {
       colors: prev.colors.includes(color)
         ? prev.colors.filter((item) => item !== color)
         : [...prev.colors, color],
-    }));
-  }
-
-  function toggleType(type) {
-    setFilters((prev) => ({
-      ...prev,
-      types: prev.types.includes(type)
-        ? prev.types.filter((item) => item !== type)
-        : [...prev.types, type],
     }));
   }
 
@@ -494,9 +503,9 @@ function App() {
     }
   }
 
-  async function addToDeck(card) {
-    if (!activeDeckId) return;
-    const deck = decks.find((item) => item.id === activeDeckId);
+  async function addToDeck(card, deckId = activeDeckId) {
+    if (!deckId) return;
+    const deck = decks.find((item) => item.id === deckId);
     if (!deck) return;
     const cards = deck.cards.some((item) => item.card.id === card.id)
       ? deck.cards.map((item) =>
@@ -1311,29 +1320,13 @@ function App() {
                 ))}
               </div>
             </div>
-            <div className="filter-group type-filter">
-              <label>Card type</label>
-              <div className="type-buttons">
-                {[
-                  "Creature",
-                  "Instant",
-                  "Sorcery",
-                  "Artifact",
-                  "Enchantment",
-                  "Land",
-                ].map((type) => (
-                  <button
-                    type="button"
-                    key={type}
-                    className={`type-btn ${filters.types.includes(type) ? "active" : ""}`}
-                    onClick={() => toggleType(type)}
-                    aria-pressed={filters.types.includes(type)}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <label className="filter-group type-filter">
+              Card type
+              <select value={filters.types[0] || ""} onChange={(event) => setFilters((previous) => ({ ...previous, types: event.target.value ? [event.target.value] : [] }))}>
+                <option value="">Any type</option>
+                {cardTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+            </label>
             <div className="compact-filters">
               <label>
                 Rarity
@@ -1456,6 +1449,8 @@ function App() {
                 card={card}
                 actionLabel="Add to collection"
                 onAction={() => add(card)}
+                price={cardPrice(card)}
+                onAddToDeck={decks.length > 0 ? () => setDeckPickerCard(card) : undefined}
                 wishlistActive={wishlist.some((item) => item.id === card.id)}
                 onWishlist={() => toggleWishlist(card)}
                 onDragStart={(event) => startDrag(event, card, "search")}
@@ -1840,17 +1835,33 @@ function App() {
           }}
         />
       )}
+      {deckPickerCard && (
+        <DeckPickerModal
+          card={deckPickerCard}
+          decks={decks}
+          activeDeckId={activeDeckId}
+          onClose={() => setDeckPickerCard(null)}
+          onConfirm={async (deckId) => {
+            await addToDeck(deckPickerCard, deckId);
+            setDeckPickerCard(null);
+          }}
+        />
+      )}
       <footer>Built for the cards you actually play with.</footer>
     </div>
   );
 }
 
+function DeckPickerModal({ card, decks, activeDeckId, onClose, onConfirm }) {
+  const [selectedDeckId, setSelectedDeckId] = useState(activeDeckId || decks[0]?.id || "");
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="edit-modal deck-picker-modal"><div className="modal-heading"><div><p className="eyebrow">ADD TO DECK</p><h2>{card.name}</h2></div><button className="modal-close" type="button" onClick={onClose} aria-label="Close deck picker">×</button></div><label className="printing-select">Deck<select value={selectedDeckId} onChange={(event) => setSelectedDeckId(event.target.value)}>{decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name} · {deck.format}</option>)}</select></label><div className="modal-actions"><button className="cancel-button" type="button" onClick={onClose}>Cancel</button><button className="save-button" type="button" disabled={!selectedDeckId} onClick={() => onConfirm(selectedDeckId)}>Add to deck</button></div></div></div>;
+}
+
 function SearchFilters({ filters, setFilters }) {
   const toggleColor = (color) => setFilters((previous) => ({ ...previous, colors: previous.colors.includes(color) ? previous.colors.filter((item) => item !== color) : [...previous.colors, color] }));
-  const toggleType = (type) => setFilters((previous) => ({ ...previous, types: previous.types.includes(type) ? previous.types.filter((item) => item !== type) : [...previous.types, type] }));
   return <div className="filters deck-filters">
     <div className="filter-group"><label>Colors</label><div className="color-buttons">{["W", "U", "B", "R", "G"].map((color) => <button type="button" key={color} className={`color-btn ${colorClasses[color]} ${filters.colors.includes(color) ? "active" : ""}`} onClick={() => toggleColor(color)} title={colorNames[color]} aria-pressed={filters.colors.includes(color)}>{color}</button>)}</div></div>
-    <div className="filter-group type-filter"><label>Card type</label><div className="type-buttons">{["Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Land"].map((type) => <button type="button" key={type} className={`type-btn ${filters.types.includes(type) ? "active" : ""}`} onClick={() => toggleType(type)} aria-pressed={filters.types.includes(type)}>{type}</button>)}</div></div>
+    <label className="filter-group type-filter">Card type<select value={filters.types[0] || ""} onChange={(event) => setFilters((previous) => ({ ...previous, types: event.target.value ? [event.target.value] : [] }))}><option value="">Any type</option>{cardTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
     <div className="compact-filters"><label>Rarity<select value={filters.rarity} onChange={(event) => setFilters((previous) => ({ ...previous, rarity: event.target.value }))}><option value="">Any rarity</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="mythic">Mythic</option></select></label><label>Min mana<input type="number" min="0" max="20" value={filters.manaMin} onChange={(event) => setFilters((previous) => ({ ...previous, manaMin: event.target.value }))} placeholder="Any" /></label><label>Max mana<input type="number" min="0" max="20" value={filters.manaMax} onChange={(event) => setFilters((previous) => ({ ...previous, manaMax: event.target.value }))} placeholder="Any" /></label></div>
     <div className="advanced-filters"><label>Oracle text<input value={filters.oracle} onChange={(event) => setFilters((previous) => ({ ...previous, oracle: event.target.value }))} placeholder="draw a card" /></label><label>Set code<input value={filters.set} onChange={(event) => setFilters((previous) => ({ ...previous, set: event.target.value }))} placeholder="set code" maxLength="5" /></label><label>Format<select value={filters.format} onChange={(event) => setFilters((previous) => ({ ...previous, format: event.target.value }))}><option value="">Any format</option><option value="commander">Commander</option><option value="standard">Standard</option><option value="modern">Modern</option><option value="pioneer">Pioneer</option><option value="pauper">Pauper</option><option value="legacy">Legacy</option></select></label></div>
   </div>;
@@ -1999,6 +2010,8 @@ function CardTile({
   card,
   actionLabel,
   onAction,
+  price,
+  onAddToDeck,
   wishlistActive,
   onWishlist,
   onDragStart,
@@ -2028,9 +2041,11 @@ function CardTile({
         <div>
           <h3>{card.name}</h3>
           <p>{card.type_line}</p>
+          {price !== undefined && <p className="card-price">{price ? `$${price.toFixed(2)}` : "No price"}</p>}
         </div>
         <div className="card-actions">
           <button onClick={() => onAction(card)}>{actionLabel}</button>
+          {onAddToDeck && <button className="deck-action" type="button" onClick={onAddToDeck}>Add to deck</button>}
           <button
             className="wishlist-action"
             type="button"

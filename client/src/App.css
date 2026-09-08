@@ -28,6 +28,7 @@ h2{ margin-bottom: 0; color: #fff9e9; font-size: 30px; font-weight: 400; letter-
 .search button:disabled{ opacity: .65; cursor: wait }
 .filters{ display: grid; grid-template-columns: auto 1fr auto; gap: 26px; align-items: start }
 .filter-group label, .compact-filters label, .sort-control{ display: grid; gap: 8px; color: #a7a395; font: 11px Arial, sans-serif; letter-spacing: 1px; text-transform: uppercase }
+.filter-group select{ min-width: 140px; padding: 8px; color: #f7f0df; background: #090b0d; border: 1px solid #53616a88 }
 .color-buttons, .type-buttons{ display: flex; gap: 6px; flex-wrap: wrap }
 .color-btn{ width: 31px; height: 31px; padding: 0; color: #191a16; border: 1px solid #aaa38e; border-radius: 50%; background: #eee6c9; font: 700 12px Arial, sans-serif; opacity: .55 }
 .color-btn.blue{ background: #6f9db5 }.color-btn.black{ color: #fff; background: #46444a }.color-btn.red{ background: #bd6b58 }.color-btn.green{ background: #7c9d6e }
@@ -48,11 +49,11 @@ h2{ margin-bottom: 0; color: #fff9e9; font-size: 30px; font-weight: 400; letter-
 .rarity-dot.rare{ background: #b9c3c6 }.rarity-dot.mythic{ background: #d38b57 }
 .wishlist-button{ position: absolute; top: 16px; left: 12px; width: 28px; height: 28px; padding: 0; color: #fff9e9; background: #171814bb; border: 1px solid #fff9e988; border-radius: 50%; font-size: 20px; line-height: 1 }
 .wishlist-button.active, .wishlist-button:hover{ color: #1a1b16; background: #c9af65; border-color: #c9af65 }
-.card-tile-body{ display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px }
-.card-actions{ display: grid; flex: 0 0 104px; gap: 6px }
+.card-tile-body{ display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px }.card-tile-body > div:first-child{ min-width: 0; flex: 1 }
+.card-actions{ display: grid; flex: 0 1 120px; min-width: 104px; gap: 6px }
 .card-tile h3{ overflow: hidden; margin-bottom: 5px; color: #fff9e9; font-size: 17px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap }
 .card-tile p{ overflow: hidden; margin-bottom: 0; color: #9d9a8d; font: 11px Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap }
-.card-tile-body button{ padding: 9px 10px; white-space: nowrap; font-size: 10px }.card-actions .wishlist-action{ color: #c9af65; background: transparent; border: 1px solid #77705988 }.card-actions .wishlist-action:hover{ color: #1a1b16; background: #c9af65 }
+.card-tile-body button{ width: 100%; min-width: 0; min-height: 32px; padding: 7px 8px; white-space: normal; overflow-wrap: anywhere; font-size: 10px; line-height: 1.2 }.card-actions .wishlist-action{ color: #c9af65; background: transparent; border: 1px solid #77705988 }.card-actions .wishlist-action:hover{ color: #1a1b16; background: #c9af65 }
 .empty-state{ padding: 48px 20px; color: #9d9a8d; text-align: center; background: #111519; border: 1px dashed #53616a88; font: 14px Arial, sans-serif }
 .empty-state span{ display: block; margin-bottom: 12px; color: #c9af65; font: 30px Georgia, serif }
 .empty-state p{ margin-bottom: 0 }
@@ -89,3 +90,4 @@ footer{ padding: 50px 0 20px; text-align: center; text-transform: none; letter-s
 .deck-builder-deck-actions{ display: flex; align-items: end; gap: 12px }.delete-deck-button{ padding: 9px 12px; color: #efb0a0; background: transparent; border: 1px solid #9b5445; font: 700 11px Arial, sans-serif }.delete-deck-button:hover{ color: #fff9e9; background: #9b5445 }.deck-filters{ margin-top: 8px; padding-top: 18px; border-top: 1px solid #53616a66 }.deck-filters .advanced-filters{ margin-top: 0 }
 @media (max-width: 620px){ .deck-builder-deck-actions{ align-items: stretch; flex-direction: column; width: 100% }.deck-builder-deck-actions .deck-picker{ max-width: none } }
 .collection-import summary{ padding: 4px 0; color: #fff9e9; cursor: pointer; font: 18px Georgia, serif; list-style-position: inside }.collection-import summary::marker{ color: #c9af65 }.collection-import[open] summary{ margin-bottom: 24px }.collection-import[open] .section-heading{ margin-bottom: 18px }
+.card-price{ color: #e6ce82 !important; font-weight: 700 !important }.card-actions .deck-action{ color: #c9af65; background: transparent; border: 1px solid #77705988 }.card-actions .deck-action:hover{ color: #1a1b16; background: #c9af65; border-color: #c9af65 }.deck-picker-modal .save-button:disabled{ cursor: not-allowed; opacity: .5 }
