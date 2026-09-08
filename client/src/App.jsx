@@ -163,6 +163,14 @@ function App() {
   const [searchError, setSearchError] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [groupPrintings, setGroupPrintings] = useState(false);
+  const [activeView, setActiveView] = useState("collection");
+  const [deckMode, setDeckMode] = useState("all");
+  const [deckQuery, setDeckQuery] = useState("");
+  const [deckResults, setDeckResults] = useState([]);
+  const [deckSearchState, setDeckSearchState] = useState("idle");
+  const [deckSearchError, setDeckSearchError] = useState("");
+  const [deckNextPage, setDeckNextPage] = useState("");
+  const [isLoadingMoreDeck, setIsLoadingMoreDeck] = useState(false);
   const [filters, setFilters] = useState({
     colors: [],
     types: [],
@@ -174,18 +182,30 @@ function App() {
     format: "",
   });
 
-  function buildSearchQuery() {
-    let searchQuery = query.trim();
+  const initialFilters = {
+    colors: [],
+    types: [],
+    rarity: "",
+    manaMin: "",
+    manaMax: "",
+    oracle: "",
+    set: "",
+    format: "",
+  };
+  const [deckFilters, setDeckFilters] = useState(initialFilters);
+
+  function buildSearchQuery(searchText = query, searchFilters = filters) {
+    let searchQuery = searchText.trim();
     const parts = [];
-    if (filters.colors.length > 0) parts.push(`c:${filters.colors.join("")}`);
-    if (filters.types.length > 0)
-      parts.push(filters.types.map((type) => `t:${type}`).join(" "));
-    if (filters.rarity) parts.push(`r:${filters.rarity}`);
-    if (filters.manaMin) parts.push(`mv>=${filters.manaMin}`);
-    if (filters.manaMax) parts.push(`mv<=${filters.manaMax}`);
-    if (filters.oracle.trim()) parts.push(`o:"${filters.oracle.trim()}"`);
-    if (filters.set.trim()) parts.push(`set:${filters.set.trim()}`);
-    if (filters.format) parts.push(`f:${filters.format}`);
+    if (searchFilters.colors.length > 0) parts.push(`c:${searchFilters.colors.join("")}`);
+    if (searchFilters.types.length > 0)
+      parts.push(searchFilters.types.map((type) => `t:${type}`).join(" "));
+    if (searchFilters.rarity) parts.push(`r:${searchFilters.rarity}`);
+    if (searchFilters.manaMin) parts.push(`mv>=${searchFilters.manaMin}`);
+    if (searchFilters.manaMax) parts.push(`mv<=${searchFilters.manaMax}`);
+    if (searchFilters.oracle.trim()) parts.push(`o:"${searchFilters.oracle.trim()}"`);
+    if (searchFilters.set.trim()) parts.push(`set:${searchFilters.set.trim()}`);
+    if (searchFilters.format) parts.push(`f:${searchFilters.format}`);
     if (parts.length > 0)
       searchQuery = (searchQuery ? `${searchQuery} ` : "") + parts.join(" ");
     return searchQuery;
@@ -460,6 +480,20 @@ function App() {
     setDeckName("");
   }
 
+  async function deleteDeck(deckId) {
+    if (!window.confirm("Delete this deck? This cannot be undone.")) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/decks/${deckId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("The deck could not be deleted.");
+      const nextDecks = decks.filter((deck) => deck.id !== deckId);
+      setDecks(nextDecks);
+      localStorage.setItem("mtg-decks", JSON.stringify(nextDecks));
+      if (activeDeckId === deckId) setActiveDeckId(nextDecks[0]?.id || "");
+    } catch (error) {
+      setCollectionError(error.message || "The deck could not be deleted.");
+    }
+  }
+
   async function addToDeck(card) {
     if (!activeDeckId) return;
     const deck = decks.find((item) => item.id === activeDeckId);
@@ -473,6 +507,70 @@ function App() {
       : [...deck.cards, { card, quantity: 1 }];
     await saveDeck({ ...deck, cards });
   }
+
+  async function changeDeckQuantity(cardId, amount) {
+    if (!activeDeck) return;
+    const cards = activeDeck.cards
+      .map((item) => item.card.id === cardId ? { ...item, quantity: item.quantity + amount } : item)
+      .filter((item) => item.quantity > 0);
+    await saveDeck({ ...activeDeck, cards });
+  }
+
+  async function searchDeckCards(event) {
+    event?.preventDefault();
+    const searchQuery = buildSearchQuery(deckQuery, deckFilters);
+    if (!searchQuery) return;
+    setDeckSearchState("loading");
+    setDeckSearchError("");
+    if (deckMode === "collection") {
+      setDeckResults(collection.filter((card) => matchesDeckFilters(card, deckQuery, deckFilters)));
+      setDeckNextPage("");
+      setDeckSearchState("success");
+      return;
+    }
+    try {
+      const response = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(searchQuery)}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.details || "Scryfall could not complete that search.");
+      setDeckResults(json.data || []);
+      setDeckNextPage(json.next_page || "");
+      setDeckSearchState("success");
+    } catch (error) {
+      setDeckResults([]);
+      setDeckSearchError(error.message || "Deck search failed.");
+      setDeckSearchState("error");
+    }
+  }
+
+  async function loadMoreDeckCards() {
+    if (!deckNextPage || isLoadingMoreDeck) return;
+    setIsLoadingMoreDeck(true);
+    try {
+      const response = await fetch(deckNextPage);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.details || "Could not load more deck cards.");
+      setDeckResults((previous) => [...previous, ...(json.data || [])]);
+      setDeckNextPage(json.next_page || "");
+    } catch (error) {
+      setDeckSearchError(error.message || "Could not load more deck cards.");
+    } finally {
+      setIsLoadingMoreDeck(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeView !== "deck-builder") return;
+    const searchQuery = buildSearchQuery(deckQuery, deckFilters);
+    if (!searchQuery) {
+      setDeckResults([]);
+      setDeckNextPage("");
+      setDeckSearchError("");
+      setDeckSearchState("idle");
+      return;
+    }
+    const timeout = setTimeout(() => searchDeckCards(), 400);
+    return () => clearTimeout(timeout);
+  }, [activeView, deckQuery, deckFilters, deckMode]);
 
   async function importManaBox(event) {
     const file = event.target.files?.[0];
@@ -818,6 +916,23 @@ function App() {
     return terms.every((term) => searchableText.includes(term));
   }
 
+  function matchesDeckFilters(card, localQuery, searchFilters) {
+    if (!matchesLocalQuery(card, localQuery)) return false;
+    if (searchFilters.colors.length > 0 && !searchFilters.colors.every((color) => (card.colors || []).includes(color))) return false;
+    if (searchFilters.types.length > 0 && !searchFilters.types.every((type) => card.type_line?.toLowerCase().includes(type.toLowerCase()))) return false;
+    if (searchFilters.rarity && card.rarity !== searchFilters.rarity) return false;
+    const manaValue = Number(card.mana_value ?? card.cmc);
+    if (searchFilters.manaMin && (Number.isNaN(manaValue) || manaValue < Number(searchFilters.manaMin))) return false;
+    if (searchFilters.manaMax && (Number.isNaN(manaValue) || manaValue > Number(searchFilters.manaMax))) return false;
+    if (searchFilters.oracle.trim() && !card.oracle_text?.toLowerCase().includes(searchFilters.oracle.trim().toLowerCase())) return false;
+    if (searchFilters.set.trim()) {
+      const setQuery = searchFilters.set.trim().toLowerCase();
+      if (!card.set?.toLowerCase().includes(setQuery) && !card.set_name?.toLowerCase().includes(setQuery)) return false;
+    }
+    if (searchFilters.format && card.legalities?.[searchFilters.format] !== "legal") return false;
+    return true;
+  }
+
   function startDrag(event, card, source) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData(
@@ -953,9 +1068,6 @@ function App() {
     (total, card) => total + card.quantity,
     0,
   );
-  const colorsInCollection = [
-    ...new Set(collection.flatMap((card) => card.colors || [])),
-  ];
   const collectionRows = useMemo(() => {
     const rows = groupPrintings
       ? groupCollectionByName(collection)
@@ -983,59 +1095,40 @@ function App() {
 
   return (
     <div className="app">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">CARD LIBRARY / 01</p>
-          <h1>
-            Keep your cardboard <em>close.</em>
-          </h1>
-          <p className="hero-copy">
-            Search the multiverse, save what you own, and see your collection
-            take shape.
-          </p>
-        </div>
-        <div className="hero-mark" aria-hidden="true">
-          ✦
-        </div>
-      </header>
-      <section className="stats" aria-label="Collection summary">
-        <div>
-          <strong>{totalCards}</strong>
-          <span>cards owned</span>
-        </div>
-        <div>
-          <strong>{collection.length}</strong>
-          <span>unique cards</span>
-        </div>
-        <div>
-          <strong>{wishlist.length}</strong>
-          <span>wishlist cards</span>
-        </div>
-        <div>
-          <strong>{colorsInCollection.length || "—"}</strong>
-          <span>colors represented</span>
-        </div>
-      </section>
-      <main>
-        <section className="collection-import">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">COLLECTION TOOLS</p>
-              <h2>Import your binder</h2>
-            </div>
-            <span className="api-note">ManaBox CSV</span>
-          </div>
-          <label className="import-button">
-            Import ManaBox CSV
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={importManaBox}
-            />
-          </label>
-          {importState && <div className="message">{importState}</div>}
-        </section>
-        {activeDeck && (
+      <nav className="app-nav" aria-label="Primary navigation">
+        <button className={activeView === "collection" ? "active" : ""} type="button" onClick={() => setActiveView("collection")}>Collection</button>
+        <button className={activeView === "deck-builder" ? "active" : ""} type="button" onClick={() => setActiveView("deck-builder")}>Deck builder</button>
+      </nav>
+      {activeView === "deck-builder" && <DeckBuilderView
+        decks={decks}
+        activeDeck={activeDeck}
+        activeDeckId={activeDeckId}
+        setActiveDeckId={setActiveDeckId}
+        deckName={deckName}
+        setDeckName={setDeckName}
+        deckFormat={deckFormat}
+        setDeckFormat={setDeckFormat}
+        createDeck={createDeck}
+        deleteDeck={deleteDeck}
+        deckMode={deckMode}
+        setDeckMode={setDeckMode}
+        deckQuery={deckQuery}
+        setDeckQuery={setDeckQuery}
+        deckFilters={deckFilters}
+        setDeckFilters={setDeckFilters}
+        deckResults={deckResults}
+        deckSearchState={deckSearchState}
+        deckSearchError={deckSearchError}
+        deckNextPage={deckNextPage}
+        isLoadingMoreDeck={isLoadingMoreDeck}
+        searchDeckCards={searchDeckCards}
+        loadMoreDeckCards={loadMoreDeckCards}
+        addToDeck={addToDeck}
+        changeDeckQuantity={changeDeckQuantity}
+        cardPrice={cardPrice}
+      />}
+      {activeView === "collection" && <main>
+        {false && activeDeck && (
           <section className="deck-suggestions">
             <div className="section-heading">
               <div>
@@ -1062,7 +1155,7 @@ function App() {
             </div>
           </section>
         )}
-        <section className="decks">
+        {false && <section className="decks">
           <div className="section-heading">
             <div>
               <p className="eyebrow">DECK LAB</p>
@@ -1179,12 +1272,11 @@ function App() {
               )}
             </div>
           )}
-        </section>
+        </section>}
         <section className="search-panel">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">DISCOVER</p>
-              <h2>Find your next card</h2>
+              <h2>Search cards</h2>
             </div>
             <span className="api-note">
               Powered by Scryfall · updates as you type
@@ -1335,16 +1427,12 @@ function App() {
         >
           <div className="section-heading">
             <div>
-              <p className="eyebrow">SEARCH RESULTS</p>
               <h2>
                 {searchState === "success"
                   ? `${totalResults.toLocaleString()} cards found`
-                  : "A whole multiverse"}
+                  : "Search results"}
               </h2>
             </div>
-            <span className="drag-hint">
-              Drag cards to your binder or wishlist
-            </span>
           </div>
           {searchState === "idle" && (
             <div className="empty-state">
@@ -1399,10 +1487,7 @@ function App() {
         >
           <div className="section-heading collection-heading">
             <div>
-              <p className="eyebrow">YOUR BINDER</p>
-              <h2>
-                My collection <span>{totalCards}</span>
-              </h2>
+              <h2>My collection <span>{totalCards}</span></h2>
             </div>
             <div className="collection-tools">
               <label className="sort-control">
@@ -1507,10 +1592,7 @@ function App() {
         >
           <div className="section-heading">
             <div>
-              <p className="eyebrow">WANTED LIST</p>
-              <h2>
-                Wishlist <span>{wishlist.length}</span>
-              </h2>
+              <h2>Wishlist <span>{wishlist.length}</span></h2>
             </div>
             <p className="wishlist-note">
               Save cards to remember what to trade for next.
@@ -1573,7 +1655,25 @@ function App() {
             </div>
           )}
         </section>
-      </main>
+        <details className="collection-import">
+          <summary>Collection tools</summary>
+          <div className="section-heading">
+            <div>
+              <h2>Import collection</h2>
+            </div>
+            <span className="api-note">ManaBox CSV</span>
+          </div>
+          <label className="import-button">
+            Import ManaBox CSV
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={importManaBox}
+            />
+          </label>
+          {importState && <div className="message">{importState}</div>}
+        </details>
+      </main>}
       {editing && (
         <div
           className="modal-backdrop"
@@ -1742,6 +1842,85 @@ function App() {
       )}
       <footer>Built for the cards you actually play with.</footer>
     </div>
+  );
+}
+
+function SearchFilters({ filters, setFilters }) {
+  const toggleColor = (color) => setFilters((previous) => ({ ...previous, colors: previous.colors.includes(color) ? previous.colors.filter((item) => item !== color) : [...previous.colors, color] }));
+  const toggleType = (type) => setFilters((previous) => ({ ...previous, types: previous.types.includes(type) ? previous.types.filter((item) => item !== type) : [...previous.types, type] }));
+  return <div className="filters deck-filters">
+    <div className="filter-group"><label>Colors</label><div className="color-buttons">{["W", "U", "B", "R", "G"].map((color) => <button type="button" key={color} className={`color-btn ${colorClasses[color]} ${filters.colors.includes(color) ? "active" : ""}`} onClick={() => toggleColor(color)} title={colorNames[color]} aria-pressed={filters.colors.includes(color)}>{color}</button>)}</div></div>
+    <div className="filter-group type-filter"><label>Card type</label><div className="type-buttons">{["Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Land"].map((type) => <button type="button" key={type} className={`type-btn ${filters.types.includes(type) ? "active" : ""}`} onClick={() => toggleType(type)} aria-pressed={filters.types.includes(type)}>{type}</button>)}</div></div>
+    <div className="compact-filters"><label>Rarity<select value={filters.rarity} onChange={(event) => setFilters((previous) => ({ ...previous, rarity: event.target.value }))}><option value="">Any rarity</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="mythic">Mythic</option></select></label><label>Min mana<input type="number" min="0" max="20" value={filters.manaMin} onChange={(event) => setFilters((previous) => ({ ...previous, manaMin: event.target.value }))} placeholder="Any" /></label><label>Max mana<input type="number" min="0" max="20" value={filters.manaMax} onChange={(event) => setFilters((previous) => ({ ...previous, manaMax: event.target.value }))} placeholder="Any" /></label></div>
+    <div className="advanced-filters"><label>Oracle text<input value={filters.oracle} onChange={(event) => setFilters((previous) => ({ ...previous, oracle: event.target.value }))} placeholder="draw a card" /></label><label>Set code<input value={filters.set} onChange={(event) => setFilters((previous) => ({ ...previous, set: event.target.value }))} placeholder="set code" maxLength="5" /></label><label>Format<select value={filters.format} onChange={(event) => setFilters((previous) => ({ ...previous, format: event.target.value }))}><option value="">Any format</option><option value="commander">Commander</option><option value="standard">Standard</option><option value="modern">Modern</option><option value="pioneer">Pioneer</option><option value="pauper">Pauper</option><option value="legacy">Legacy</option></select></label></div>
+  </div>;
+}
+
+function DeckBuilderView({
+  decks,
+  activeDeck,
+  activeDeckId,
+  setActiveDeckId,
+  deckName,
+  setDeckName,
+  deckFormat,
+  setDeckFormat,
+  createDeck,
+  deleteDeck,
+  deckMode,
+  setDeckMode,
+  deckQuery,
+  setDeckQuery,
+  deckFilters,
+  setDeckFilters,
+  deckResults,
+  deckSearchState,
+  deckSearchError,
+  deckNextPage,
+  isLoadingMoreDeck,
+  searchDeckCards,
+  loadMoreDeckCards,
+  addToDeck,
+  changeDeckQuantity,
+  cardPrice,
+}) {
+  return (
+    <section className="deck-builder-view">
+      <div className="deck-builder-heading">
+        <div>
+          <h2>Deck builder</h2>
+        </div>
+      </div>
+      <div className="deck-builder-toolbar">
+        <form className="deck-create" onSubmit={createDeck}>
+          <input value={deckName} onChange={(event) => setDeckName(event.target.value)} placeholder="Deck name" aria-label="Deck name" />
+          <select value={deckFormat} onChange={(event) => setDeckFormat(event.target.value)} aria-label="Deck format">
+            <option value="commander">Commander</option>
+            <option value="modern">Modern</option>
+            <option value="standard">Standard</option>
+            <option value="casual">Casual</option>
+          </select>
+          <button type="submit">New deck</button>
+        </form>
+        {decks.length > 0 && <div className="deck-builder-deck-actions"><label className="deck-picker">Active deck<select value={activeDeckId} onChange={(event) => setActiveDeckId(event.target.value)}>{decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name} · {deck.format}</option>)}</select></label>{activeDeck && <button className="delete-deck-button" type="button" onClick={() => deleteDeck(activeDeck.id)}>Delete deck</button>}</div>}
+      </div>
+      {!activeDeck ? <div className="empty-state"><span>＋</span><p>Create a deck to begin building.</p></div> : <div className="deck-builder-layout">
+        <section className="deck-card-browser">
+          <div className="section-heading"><div><p className="eyebrow">CARD SOURCE</p><h3>Add cards to {activeDeck.name}</h3></div><span className="api-note">{deckResults.length ? `${deckResults.length} cards` : "Search to begin"}</span></div>
+          <div className="deck-mode-switch" role="tablist" aria-label="Deck card source">
+            <button className={deckMode === "all" ? "active" : ""} type="button" role="tab" aria-selected={deckMode === "all"} onClick={() => setDeckMode("all")}>All Magic</button>
+            <button className={deckMode === "collection" ? "active" : ""} type="button" role="tab" aria-selected={deckMode === "collection"} onClick={() => setDeckMode("collection")}>My collection</button>
+          </div>
+          <form className="deck-search" onSubmit={searchDeckCards}><input value={deckQuery} onChange={(event) => setDeckQuery(event.target.value)} placeholder={deckMode === "all" ? "Search every Magic card" : "Search cards you own"} aria-label={deckMode === "all" ? "Search all Magic cards" : "Search your collection for deck cards"} /><button type="submit" disabled={deckSearchState === "loading"}>{deckSearchState === "loading" ? "Searching…" : "Search"}</button></form>
+          <SearchFilters filters={deckFilters} setFilters={setDeckFilters} />
+          {deckSearchError && <div className="message error-message">{deckSearchError}</div>}
+          {deckSearchState === "success" && deckResults.length === 0 && <div className="empty-state"><p>No cards matched that search.</p></div>}
+          <div className="deck-result-list">{deckResults.map((card) => <article className="deck-result" key={card.id}><img src={cardImage(card)} alt="" /><div><strong>{card.name}</strong><span>{card.set_name || card.set?.toUpperCase()} · {card.type_line}</span></div><button type="button" onClick={() => addToDeck(card)}>Add</button></article>)}</div>
+          {deckNextPage && <button className="load-more" type="button" onClick={loadMoreDeckCards} disabled={isLoadingMoreDeck}>{isLoadingMoreDeck ? "Loading more cards…" : "Load more cards"}</button>}
+        </section>
+        <aside className="deck-list-panel"><div className="section-heading"><div><p className="eyebrow">DECK LIST</p><h3>{activeDeck.name}</h3></div><span className="api-note">{activeDeck.cards.reduce((total, item) => total + item.quantity, 0)} cards · ${activeDeck.cards.reduce((total, item) => total + (cardPrice(item.card) || 0) * item.quantity, 0).toFixed(2)}</span></div>{activeDeck.cards.length === 0 ? <div className="empty-state"><p>Your deck list is empty.</p></div> : <div className="deck-builder-list">{activeDeck.cards.map((item) => <div className="deck-builder-row" key={item.card.id}><div><strong>{item.card.name}</strong><span>{item.card.type_line}</span></div><div className="deck-quantity"><button type="button" onClick={() => changeDeckQuantity(item.card.id, -1)} aria-label={`Remove one ${item.card.name}`}>−</button><strong>{item.quantity}</strong><button type="button" onClick={() => changeDeckQuantity(item.card.id, 1)} aria-label={`Add one ${item.card.name}`}>＋</button></div></div>)}</div>}</aside>
+      </div>}
+    </section>
   );
 }
 
