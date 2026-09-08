@@ -79,6 +79,37 @@ function validQuantity(value){
   return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
 }
 
+async function updateCardRecord(table, id, quantity, card){
+  const db = await database;
+  const nextId = card?.id || id;
+  const cardJson = card ? JSON.stringify({ ...card, id: nextId }) : null;
+  await db.run('BEGIN TRANSACTION');
+  try {
+    const source = await db.get(`SELECT id FROM ${table} WHERE id = ?`, id);
+    if (!source) {
+      await db.run('ROLLBACK');
+      return null;
+    }
+    if (nextId !== id) {
+      const target = await db.get(`SELECT id FROM ${table} WHERE id = ?`, nextId);
+      if (target) {
+        await db.run(`UPDATE ${table} SET quantity = quantity + ?, card_json = ? WHERE id = ?`, quantity, cardJson, nextId);
+        await db.run(`DELETE FROM ${table} WHERE id = ?`, id);
+      } else {
+        await db.run(`UPDATE ${table} SET id = ?, quantity = ?, card_json = COALESCE(?, card_json) WHERE id = ?`, nextId, quantity, cardJson, id);
+      }
+    } else {
+      await db.run(`UPDATE ${table} SET quantity = ?, card_json = COALESCE(?, card_json) WHERE id = ?`, quantity, cardJson, id);
+    }
+    await db.run('COMMIT');
+  } catch(error) {
+    await db.run('ROLLBACK');
+    throw error;
+  }
+  const row = await db.get(`SELECT card_json, quantity FROM ${table} WHERE id = ?`, nextId);
+  return row ? { ...JSON.parse(row.card_json), quantity: row.quantity } : null;
+}
+
 async function readWishlist(){
   const db = await database;
   const rows = await db.all('SELECT card_json, quantity FROM wishlist ORDER BY json_extract(card_json, \'$.name\') COLLATE NOCASE');
@@ -160,11 +191,9 @@ app.put('/api/collection/:id', async (req, res) => {
   const quantity = validQuantity(req.body.quantity);
   if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
   try {
-    const db = await database;
-    const cardJson = req.body.card ? JSON.stringify({ ...req.body.card, id }) : null;
-    const result = await db.run('UPDATE collection SET quantity = ?, card_json = COALESCE(?, card_json), updated_at = CURRENT_TIMESTAMP WHERE id = ?', quantity, cardJson, id);
-    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
-    res.json(await readCard(id));
+    const card = await updateCardRecord('collection', id, quantity, req.body.card);
+    if (!card) return res.status(404).json({ error: 'not found' });
+    res.json(card);
   } catch(err) {
     res.status(500).json({ error: String(err) });
   }
@@ -211,13 +240,9 @@ app.put('/api/wishlist/:id', async (req, res) => {
   const quantity = validQuantity(req.body.quantity);
   if (!quantity) return res.status(400).json({ error: 'quantity must be a positive integer' });
   try {
-    const db = await database;
-    const cardJson = req.body.card ? JSON.stringify({ ...req.body.card, id: req.params.id }) : null;
-    const result = await db.run('UPDATE wishlist SET quantity = ?, card_json = COALESCE(?, card_json) WHERE id = ?', quantity, cardJson, req.params.id);
-    if (result.changes === 0) return res.status(404).json({ error: 'not found' });
-    const rows = await db.all('SELECT card_json, quantity FROM wishlist WHERE id = ?', req.params.id);
-    const row = rows[0];
-    res.json({ ...JSON.parse(row.card_json), quantity: row.quantity });
+    const card = await updateCardRecord('wishlist', req.params.id, quantity, req.body.card);
+    if (!card) return res.status(404).json({ error: 'not found' });
+    res.json(card);
   } catch(err) {
     res.status(500).json({ error: String(err) });
   }

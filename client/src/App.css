@@ -62,6 +62,7 @@ h2{ margin-bottom: 0; color: #fff9e9; font-size: 30px; font-weight: 400; letter-
 .message{ padding: 18px; font: 14px Arial, sans-serif }.error-message{ color: #efb0a0; background: #402620; border: 1px solid #9b5445 }
 .collection-heading{ margin-bottom: 20px }.collection-heading h2 span{ color: #b9a76a; font-size: 17px; vertical-align: middle }
 .sort-control{ display: flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0 }.sort-control select{ min-width: 110px }
+.collection-tools{ display: flex; align-items: center; flex-wrap: wrap; gap: 14px }.group-control{ display: flex; align-items: center; gap: 7px; color: #a7a395; font: 11px Arial, sans-serif; white-space: nowrap }.group-control input{ width: 16px; height: 16px; margin: 0; accent-color: #c9af65 }
 .collection-list{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px }
 .collection-card{ display: flex; align-items: center; gap: 14px; min-width: 0; padding: 8px; background: #151a1e; border: 1px solid #53616a66 }
 .collection-card img{ width: 47px; height: 65px; object-fit: cover }
@@ -81,3 +82,4 @@ footer{ padding: 50px 0 20px; text-align: center; text-transform: none; letter-s
 @media (max-width: 480px){ .edit-modal{ padding: 20px }.edit-fields{ grid-template-columns: 1fr }.notes-field{ grid-column: auto }.collection-card, .wishlist-card{ gap: 8px }.collection-card .edit-button, .wishlist-card .edit-button, .wishlist-card > button{ padding: 6px; font-size: 10px } }
 @media (max-width: 620px){ .decks, .deck-suggestions{ padding: 20px 16px }.deck-create > *{ width: 100% }.suggestion-list, .assistant-list{ grid-template-columns: 1fr } }
 .decks .deck-create .import-button{ display: none }.collection-import{ padding: 26px; background: #111519; border: 1px solid #53616a66 }.collection-tools{ display: flex; align-items: center; flex-wrap: wrap; gap: 14px }.import-status{ color: #a7a395; font: 12px Arial, sans-serif }
+.printing-select{ display: grid; gap: 8px; color: #a7a395; font: 11px Arial, sans-serif; letter-spacing: 1px; text-transform: uppercase }.printing-select select{ width: 100%; padding: 10px; color: #f4f3ee; background: #090b0d; border: 1px solid #53616a88 }.field-note{ color: #9d9a8d; font: 12px Arial, sans-serif; letter-spacing: 0; text-transform: none }.printing-preview{ display: flex; justify-content: center; grid-column: 1 / -1; min-height: 160px; padding: 12px; background: #090b0d }.printing-preview img{ width: min(180px, 100%); max-height: 250px; object-fit: contain }
